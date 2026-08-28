@@ -5,85 +5,139 @@
 <title>{% block title %}锅炉运行分析助手{% endblock %}</title>
 <link rel="stylesheet" href="/assets/fonts/fonts.css">
 <style>
+  /* Industry：钢蓝 + 线框。方角、发丝描边、卡片四角十字标记。 */
   :root{
-    --ink:#1d1f20;--muted:#5d5d60;--faint:#98989b;--line:#e3e3e6;--bg:#f6f7f8;
-    --accent:#416180;--hi:#e0483a;--mid:#fbaf17;--lo:#22a35c;
+    --ink:#1d1f20;--muted:#5d5d60;--faint:#98989b;
+    --line:rgba(29,31,32,.16);--line-soft:rgba(29,31,32,.08);
+    --bg:#fff;--tint:rgba(29,31,32,.03);
+    --accent:#5980a6;--accent-100:#eef6ff;--accent-300:#b5d9fd;--accent-600:#597ea3;--accent-700:#416180;
+    --n100:#f5f5f8;--n200:#e7e7ea;--n300:#d4d4d7;--n600:#7a7a7d;--n700:#5d5d60;--n800:#424244;
+    --hi:#e0483a;--mid:#fbaf17;--lo:#22a35c;
     --h:"Barlow Condensed",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
     --b:"Barlow",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--b)}
-  h1,h2,h3{font-family:var(--h);font-weight:600;margin:0}
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--b)}
+  h1,h2,h3,h4{font-family:var(--h);font-weight:600;line-height:1.12;letter-spacing:-.015em;margin:0}
+  a{color:var(--accent-700);text-underline-offset:3px}
+  a:hover{color:#2c455d}
+  :focus{outline:none}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  ::selection{background:rgba(89,128,166,.3)}
+  .muted{color:var(--n700);font-size:13px}
+  .nowrap{white-space:nowrap}
+  .tnum{font-variant-numeric:tabular-nums}
 
-  /* 顶部导航：手机上是主要入口，做成等宽三格好点 */
-  nav{display:flex;background:#fff;border-bottom:1px solid var(--line);
-      position:sticky;top:0;z-index:10}
-  nav a{flex:1;text-align:center;padding:14px 6px;text-decoration:none;
-        color:var(--muted);font-family:var(--h);font-size:16px;
-        border-bottom:2px solid transparent}
-  nav a.on{color:var(--ink);border-bottom-color:var(--accent)}
-  main{max-width:860px;margin:0 auto;padding:18px 16px 60px}
+  /* 线框对象：方角 + 发丝边 + 四角十字标记 */
+  .bp{position:relative;border:1px solid var(--line);background:transparent}
+  .bp>i.c{position:absolute;width:11px;height:11px;color:rgba(29,31,32,.55)}
+  .bp>i.c::before,.bp>i.c::after{content:"";position:absolute;background:currentColor}
+  .bp>i.c::before{left:5px;top:0;width:1px;height:100%}
+  .bp>i.c::after{top:5px;left:0;width:100%;height:1px}
+  .bp>i.tl{top:-6px;left:-6px}.bp>i.tr{top:-6px;right:-6px}
+  .bp>i.bl{bottom:-6px;left:-6px}.bp>i.br{bottom:-6px;right:-6px}
 
-  .card{background:#fff;border:1px solid var(--line);padding:18px;margin-bottom:14px}
-  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
-  select,input[type=text],textarea{width:100%;padding:11px 12px;font:15px var(--b);
-    border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:0}
-  select:focus,input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-2px}
+  /* 顶部导航 */
+  nav{display:flex;align-items:stretch;background:var(--bg);
+      border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+  .brand{display:flex;align-items:center;gap:10px;padding:0 20px;
+         border-right:1px solid var(--line);white-space:nowrap}
+  .brand .mk{width:22px;height:22px;border:1px solid var(--accent);position:relative;flex:none}
+  .brand .mk::after{content:"";position:absolute;inset:4px;background:var(--accent)}
+  .brand b{font-family:var(--h);font-weight:600;font-size:18px}
+  .brand .demo{font-family:var(--h);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+               color:var(--n600);border:1px solid var(--line);padding:1px 6px}
+  nav .tabs{display:flex}
+  nav .tabs a{display:flex;align-items:center;padding:14px 20px;text-decoration:none;white-space:nowrap;
+      font-family:var(--h);font-weight:600;font-size:15px;color:var(--n600);
+      border-right:1px solid var(--line);border-bottom:2px solid transparent}
+  nav .tabs a:hover{background:rgba(89,128,166,.08);color:var(--ink)}
+  nav .tabs a.on{color:var(--ink);border-bottom-color:var(--accent);background:rgba(89,128,166,.08)}
+  nav .status{margin-left:auto;display:flex;align-items:center;gap:16px;padding:0 20px;
+              font-size:12px;color:var(--n700);white-space:nowrap;overflow:hidden}
+  nav .status .dot{width:6px;height:6px;background:var(--lo);display:block}
 
-  button{font:16px var(--h);font-weight:600;border:0;padding:13px 20px;cursor:pointer;
-         background:var(--accent);color:#fff}
-  button:disabled{opacity:.5;cursor:default}
-  button.ghost{background:#fff;color:var(--accent);border:1px solid var(--line)}
-  /* 表格行内的次要操作，别抢主按钮的注意力 */
-  table button{font:13px var(--b);padding:5px 10px;background:#fff;
-               color:var(--muted);border:1px solid var(--line)}
-  table button:hover{color:#922b21;border-color:#f3c4bf;background:#fdedec}
-  .row{display:flex;gap:10px;flex-wrap:wrap}
-  .row>*{flex:1;min-width:120px}
+  .kicker{font-family:var(--h);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-700)}
+  .eyebrow{font-family:var(--h);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--n600)}
 
-  .lv{display:inline-block;font-family:var(--h);font-weight:600;padding:2px 10px;color:#fff}
-  .lv.高{background:var(--hi)}.lv.中{background:var(--mid);color:#1d1f20}
-  .lv.低{background:var(--lo)}.lv.未知{background:#7a7a7d}
+  /* 控件 */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;
+       font-family:var(--h);font-weight:600;font-size:14px;line-height:1.2;cursor:pointer;
+       padding:8px 14px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:0}
+  .btn:hover{background:rgba(29,31,32,.07)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:var(--accent-600)}
+  .btn.primary:active{background:var(--accent-700)}
+  .btn.lg{height:44px;font-size:15px}
+  .chip{border:1px solid var(--line);background:transparent;color:var(--n700);
+        padding:3px 10px;font-size:12px;font-family:var(--h);cursor:pointer;white-space:nowrap}
+  .chip:hover{border-color:var(--accent);color:var(--accent-700)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .cell{border:1px solid var(--line);padding:11px 4px;text-align:center;cursor:pointer;
+        font-family:var(--h);font-weight:600;font-size:15px;background:transparent;color:var(--ink)}
+  .cell:hover{background:rgba(89,128,166,.08)}
+  .cell.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  label{display:block;font-size:12px;color:var(--n700);margin-bottom:5px}
+  select,input[type=text],textarea{width:100%;padding:8px 10px;font:14px var(--b);color:var(--ink);
+    border:1px solid var(--line);background:transparent;border-radius:0;caret-color:var(--accent)}
+  select:hover,textarea:hover{border-color:rgba(29,31,32,.45)}
+  textarea{resize:vertical}
+
+  .lv{display:inline-block;font-family:var(--h);font-weight:600;font-size:12px;
+      letter-spacing:.04em;padding:1px 9px;color:#fff;white-space:nowrap}
+  .lv.高{background:var(--hi)}.lv.中{background:var(--mid);color:var(--ink)}
+  .lv.低{background:var(--lo)}.lv.未知{background:var(--n600)}
 
   table{width:100%;border-collapse:collapse;font-size:14px}
-  th,td{border-bottom:1px solid var(--line);padding:9px 6px;text-align:left}
-  th{font-family:var(--h);font-size:12px;letter-spacing:.06em;color:var(--muted)}
-  td.num{text-align:right;font-variant-numeric:tabular-nums}
-  a{color:var(--accent)}
-  .muted{color:var(--muted);font-size:13px}
-  .err{background:#fdedec;border:1px solid #f3c4bf;color:#922b21;padding:10px 12px;
-       font-size:14px;margin-top:10px}
-  .spin{display:inline-block;width:14px;height:14px;border:2px solid #fff;
-        border-top-color:transparent;border-radius:50%;animation:s .8s linear infinite;
-        vertical-align:-2px;margin-right:6px}
-  @keyframes s{to{transform:rotate(360deg)}}
+  th{text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--n700);
+     padding:7px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:7px;border-bottom:1px solid var(--line-soft)}
+  tbody tr:hover{background:rgba(29,31,32,.04)}
 
-  /* markdown 渲染出来的内容 */
-  .md h1{font-size:22px;margin:4px 0 8px}
-  .md h2{font-size:17px;margin:18px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+  .err{border:1px solid #f3c4bf;background:#fdedec;color:#922b21;padding:10px 12px;font-size:14px}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid var(--accent);
+        border-top-color:transparent;border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+  /* markdown */
+  .md h1{font-size:22px;margin:4px 0 8px;font-family:var(--h)}
+  .md h2{font-size:17px;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--line);font-family:var(--h)}
+  .md p{margin:8px 0}
   .md ul,.md ol{margin:8px 0;padding-left:20px}
   .md li{margin:4px 0}
-  .md blockquote{margin:10px 0;padding:10px 14px;background:#eef3f7;
-                 border-left:3px solid var(--accent);font-size:14px}
-  .md blockquote p{margin:4px 0}
+  .md blockquote{margin:10px 0;padding:10px 14px;background:var(--accent-100);
+                 border-left:2px solid var(--accent);font-size:14px}
   .md img{max-width:100%;border:1px solid var(--line);display:block;margin:8px 0}
-  .md table{margin:10px 0}
-  .md code{background:#eef0f2;padding:1px 5px;font-size:13px}
-  .md em{color:var(--muted);font-style:normal;font-size:13px}
+  .md code{background:var(--n100);padding:1px 5px;font-size:13px}
+  .md em{color:var(--n700);font-style:normal;font-size:13px}
   .md hr{border:0;border-top:1px solid var(--line);margin:16px 0}
-</style></head><body>
 
-<nav>
-  <a href="/"        class="{% if page=='capture' %}on{% endif %}">拍照分析</a>
-  <a href="/history" class="{% if page=='history' %}on{% endif %}">历史台账</a>
-  <a href="/chat"    class="{% if page=='chat' %}on{% endif %}">历史问答</a>
+  @media print{.noprint{display:none!important}nav{display:none}}
+  @media(max-width:900px){
+    nav .status{display:none}
+    .brand{padding:0 12px}
+    nav .tabs a{padding:14px 12px;font-size:14px}
+  }
+</style>
+{% block head %}{% endblock %}
+</head><body>
+
+<nav class="noprint">
+  <div class="brand"><span class="mk"></span><b>锅炉运行分析助手</b><span class="demo">demo</span></div>
+  <div class="tabs">
+    <a href="/"        class="{% if page=='capture' %}on{% endif %}">拍照分析</a>
+    <a href="/history" class="{% if page=='history' %}on{% endif %}">历史台账</a>
+    <a href="/chat"    class="{% if page=='chat' %}on{% endif %}">历史问答</a>
+  </div>
+  <div class="status"><span style="display:flex;align-items:center;gap:6px"><span class="dot"></span>服务在线 · {{ sites|length }} 个机位</span></div>
 </nav>
 
-<main>{% block body %}{% endblock %}</main>
+{% block body %}{% endblock %}
 
 <script>
 // 极简 markdown 渲染。不引 CDN：国内网络不稳，而且报告要能离线打开。
-// 只覆盖服务端会生成的那几种语法，不求通用。
 function md2html(s){
   s = String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const lines = s.split('\n'), out = [];
@@ -100,12 +154,12 @@ function md2html(s){
     if (/^---+$/.test(l.trim())) { out.push('<hr>'); i++; continue; }
     let m = l.match(/^(#{1,4})\s+(.*)$/);
     if (m){ const n=m[1].length; out.push('<h'+n+'>'+inline(m[2])+'</h'+n+'>'); i++; continue; }
-    if (/^&gt;/.test(l)){                       // 引用块，内部可能还有列表
+    if (/^&gt;/.test(l)){
       const buf=[];
       while(i<lines.length && /^&gt;/.test(lines[i])){ buf.push(lines[i].replace(/^&gt;\s?/,'')); i++; }
       out.push('<blockquote>'+md2html(buf.join('\n'))+'</blockquote>'); continue;
     }
-    if (/^\|/.test(l)){                         // 表格
+    if (/^\|/.test(l)){
       const rows=[];
       while(i<lines.length && /^\|/.test(lines[i])){ rows.push(lines[i]); i++; }
       const cells = r => r.split('|').slice(1,-1).map(c=>c.trim());
@@ -149,6 +203,9 @@ async function api(url, opts){
   return data;
 }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+function corners(){ return '<i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>'; }
 </script>
 {% block script %}{% endblock %}
 </body></html>

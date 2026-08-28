@@ -2,84 +2,287 @@
 {% set page = "capture" %}
 {% block title %}拍照分析 · 锅炉运行分析助手{% endblock %}
 
+{% block head %}
+<style>
+  .cap{display:grid;grid-template-columns:minmax(0,1fr) 440px;align-items:stretch;min-height:calc(100vh - 51px)}
+  .console{padding:34px 40px;display:flex;flex-direction:column;gap:20px;border-right:1px solid var(--line)}
+  .phonepane{padding:34px 40px;display:flex;justify-content:center;background:var(--tint)}
+  .phone{width:324px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .viewport{position:relative;aspect-ratio:3/4;border:1px solid var(--line);overflow:hidden;
+            background:var(--n200) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'/>") center/cover}
+  .viewport img{width:100%;height:100%;object-fit:cover;display:block}
+  .viewport .guide{position:absolute;inset:12px;border:1px dashed rgba(255,255,255,.45);pointer-events:none}
+  .viewport .cross{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%);pointer-events:none}
+  .viewport .cross::before{content:"";position:absolute;left:16px;top:0;bottom:0;width:1px;background:rgba(255,255,255,.7)}
+  .viewport .cross::after{content:"";position:absolute;top:16px;left:0;right:0;height:1px;background:rgba(255,255,255,.7)}
+  .viewport .foot{position:absolute;left:0;right:0;bottom:0;padding:8px 10px;color:#fff;font-size:11px;
+                  display:flex;justify-content:space-between;background:linear-gradient(transparent,rgba(0,0,0,.6))}
+  .viewport .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                   color:var(--n600);font-family:var(--h);font-size:15px}
+  .stages{position:absolute;inset:0;background:rgba(29,31,32,.72);display:flex;flex-direction:column;
+          justify-content:flex-end;padding:16px;gap:10px}
+  .stages .st{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;color:#fff;font-size:12px;opacity:.4}
+  .stages .st.on{opacity:1}.stages .st.done{opacity:1}
+  .stages .st i{display:block;width:9px;height:9px;justify-self:center;border:1px solid rgba(255,255,255,.45)}
+  .stages .st.on i{background:#fff;border-color:var(--accent-300);animation:pulse 1s infinite}
+  .stages .st.done i{background:var(--accent-300);border-color:var(--accent-300)}
+  .stages .st span:last-child{font-size:11px;color:rgba(255,255,255,.7);font-variant-numeric:tabular-nums}
+  .bar{height:2px;background:rgba(255,255,255,.25);margin-top:4px}
+  .bar i{display:block;height:2px;background:var(--accent-300);width:8%;transition:width .4s}
+  .verdict{border:1px solid var(--line);display:flex;flex-direction:column}
+  .verdict .top{display:flex;align-items:stretch}
+  .verdict .badge{display:flex;align-items:center;padding:0 12px;font-family:var(--h);font-weight:600;font-size:16px;color:#fff}
+  .verdict .badge.中{color:var(--ink)}
+  .verdict .mid{padding:8px 10px;flex:1;min-width:0}
+  .rowlist div.r{display:grid;grid-template-columns:100px 46px minmax(0,1fr) auto;gap:12px;align-items:center;
+                 padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
+  @media(max-width:900px){
+    .cap{grid-template-columns:1fr}
+    .console{order:2;border-right:0;border-top:1px solid var(--line);padding:24px 16px}
+    .phonepane{order:1;padding:16px;background:transparent}
+    .phone{width:100%;max-width:420px}
+  }
+</style>
+{% endblock %}
+
 {% block body %}
-<div class="card">
-  <label for="site">机组 / 位置</label>
-  <select id="site">
-    <option value="">请选择…</option>
-    {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
-  </select>
+<div class="cap">
 
-  <div class="row" style="margin-top:16px">
-    {# capture="environment" 让手机直接开后置摄像头，不弹「拍照/相册/浏览」选单。
-       桌面浏览器会忽略这个属性，退化成普通文件选择，所以下面还留了一个入口。 #}
-    <button id="btn-shot" style="flex:2">📷 拍照</button>
-    <button id="btn-pick" class="ghost">从相册选</button>
-  </div>
-  <input id="cam"  type="file" accept="image/*" capture="environment" hidden>
-  <input id="pick" type="file" accept="image/*" hidden>
+  <div class="console">
+    <div>
+      <div class="kicker">Step 01 — 现场取像</div>
+      <h2 style="font-size:30px;margin:6px 0 0">拍一张看火孔照片</h2>
+      <div style="font-size:14px;color:var(--n700);max-width:52ch;text-wrap:pretty;margin-top:6px">
+        对着看火孔正拍，尽量拍满火焰、不要逆着火焰角度。约 20 秒出结论，结果自动进台账。
+      </div>
+    </div>
 
-  <div id="preview-wrap" hidden style="margin-top:14px">
-    <img id="preview" style="width:100%;border:1px solid var(--line);display:block">
-    <div class="row" style="margin-top:10px">
-      <button id="btn-go" style="flex:2">开始分析</button>
-      <button id="btn-reset" class="ghost">重拍</button>
+    <div class="bp" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+      <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+      <div class="eyebrow">机组 / 位置 — 台账按它归档</div>
+      <div class="grid4" id="units"></div>
+      <div class="grid4" id="spots"></div>
+      <div style="font-size:12px;color:var(--n600);border-top:1px solid var(--line);padding-top:10px;
+                  display:flex;justify-content:space-between;gap:10px">
+        <span>当前机位</span><b id="site-label">未选择</b>
+      </div>
+    </div>
+
+    <div class="bp" style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+      <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+      <div class="eyebrow">最近在这个机位</div>
+      <div class="rowlist" id="recent"><div class="muted">选择机位后显示。</div></div>
+    </div>
+
+    <div style="font-size:12px;color:var(--n600);text-wrap:pretty;max-width:60ch">
+      热力图为可见光推算的<b>未标定相对亮温</b>，不代表实际温度；参考区间为经验值；风险判级由模型推断，不作为运行调整依据。
     </div>
   </div>
-  <div id="err" class="err" hidden></div>
-</div>
 
-<div id="result" class="card md" hidden></div>
+  <div class="phonepane">
+    <div class="phone">
+      <div class="bp" style="background:var(--bg);padding:10px 10px 14px;display:flex;flex-direction:column;gap:10px">
+        <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+
+        <div class="viewport" id="viewport">
+          <img id="preview" hidden alt="">
+          <div class="empty" id="vp-empty">未取像</div>
+          <div class="guide"></div><div class="cross"></div>
+          <div class="foot"><span id="vp-site">未选择机位</span><span id="vp-state" class="tnum">取景中</span></div>
+          <div class="stages" id="stages" hidden>
+            <div class="st" data-i="0"><i></i><span>照片校验</span><span>待执行</span></div>
+            <div class="st" data-i="1"><i></i><span>CV 分割与指标</span><span>待执行</span></div>
+            <div class="st" data-i="2"><i></i><span>风险判级</span><span>待执行</span></div>
+            <div class="st" data-i="3"><i></i><span>生成报告 · 落台账</span><span>待执行</span></div>
+            <div class="bar"><i id="bar"></i></div>
+          </div>
+        </div>
+
+        {# capture="environment" 让手机直接开后置摄像头。桌面浏览器忽略它，退化成文件选择，所以另留一个相册入口。 #}
+        <input id="cam"  type="file" accept="image/*" capture="environment" hidden>
+        <input id="pick" type="file" accept="image/*" hidden>
+
+        <div id="act-idle" style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+          <button id="btn-shot" class="btn primary lg">拍照</button>
+          <button id="btn-pick" class="btn lg">相册</button>
+        </div>
+        <div id="act-preview" hidden style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+          <button id="btn-go" class="btn primary lg">开始分析</button>
+          <button id="btn-reset" class="btn lg">重拍</button>
+        </div>
+        <div id="act-busy" hidden style="display:flex;align-items:center;justify-content:center;gap:8px;
+             height:44px;border:1px solid var(--line);font-family:var(--h);font-size:15px;color:var(--n700)">
+          <span class="spin"></span><span>分析中 · 剩余约 <b id="remain">20</b> 秒</span>
+        </div>
+
+        <div id="result" hidden style="display:flex;flex-direction:column;gap:10px">
+          <div class="verdict" id="verdict"></div>
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+            <a id="btn-report" class="btn primary lg" target="_blank" href="#">查看完整报告</a>
+            <button id="btn-again" class="btn lg">再拍一张</button>
+          </div>
+          <div class="muted" style="text-align:center;font-size:11px" id="archived"></div>
+        </div>
+
+        <div id="err" class="err" hidden></div>
+      </div>
+
+      <div id="summary" class="md bp" hidden style="margin-top:18px;padding:16px 18px">
+        <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+      </div>
+    </div>
+  </div>
+
+</div>
 {% endblock %}
 
 {% block script %}
 <script>
-const $ = s => document.querySelector(s);
-let file = null;
+const SITES = {{ sites|tojson }};
+const UNITS = [...new Set(SITES.map(s => s.unit))];
+const SPOTS = [...new Set(SITES.map(s => s.spot))];
+const STAGES = ['照片校验','CV 分割与指标','风险判级','生成报告 · 落台账'];
 
-function showErr(m){ const e=$('#err'); e.textContent=m; e.hidden=!m; }
+let unit = '', spot = '', file = null, timer = null, t0 = 0;
+
+function siteId(){
+  const s = SITES.find(x => x.unit === unit && x.spot === spot);
+  return s ? s.id : '';
+}
+function siteLabel(){
+  const s = SITES.find(x => x.unit === unit && x.spot === spot);
+  return s ? s.label : (unit || spot ? (unit + ' ' + spot).trim() : '未选择机位');
+}
+function showErr(m){ const e = $('#err'); e.textContent = m || ''; e.hidden = !m; }
+
+function renderPicker(){
+  $('#units').innerHTML = UNITS.map(u =>
+    '<button class="cell' + (u===unit?' on':'') + '" data-u="' + esc(u) + '">' +
+    esc(u.replace('机组','')) + '</button>').join('');
+  $('#spots').innerHTML = SPOTS.map(s =>
+    '<button class="cell' + (s===spot?' on':'') + '" data-s="' + esc(s) + '">' +
+    esc(s.replace('燃烧器','')) + '</button>').join('');
+  $$('#units .cell').forEach(b => b.onclick = () => { unit = b.dataset.u; renderPicker(); loadRecent(); });
+  $$('#spots .cell').forEach(b => b.onclick = () => { spot = b.dataset.s; renderPicker(); loadRecent(); });
+  $('#site-label').textContent = siteLabel();
+  $('#vp-site').textContent = siteLabel();
+}
+
+async function loadRecent(){
+  const id = siteId();
+  if(!id){ return; }
+  const box = $('#recent');
+  box.innerHTML = '<div class="muted">加载中…</div>';
+  try{
+    const j = await api('/api/history?' + new URLSearchParams({site:id, days:0, limit:3}));
+    if(!j.rows.length){ box.innerHTML = '<div class="muted">这个机位还没有记录。</div>'; return; }
+    box.innerHTML = j.rows.map(r =>
+      '<div class="r"><span class="tnum" style="color:var(--n700)">' + esc(r.ts.slice(5,16)) + '</span>' +
+      '<span><span class="lv ' + esc(r.risk_level||'未知') + '">' + esc(r.risk_level||'未知') + '</span></span>' +
+      '<span style="color:var(--n800);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(r.headline||'—') + '</span>' +
+      (r.report_url ? '<a href="' + esc(r.report_url) + '" target="_blank" style="font-size:12px">报告</a>' : '<span class="muted">—</span>') +
+      '</div>').join('');
+  }catch(e){ box.innerHTML = '<div class="muted">读取失败：' + esc(e.message) + '</div>'; }
+}
+
+function setPhase(p){
+  $('#act-idle').hidden    = p !== 'idle';
+  $('#act-preview').hidden = p !== 'preview';
+  $('#act-busy').hidden    = p !== 'busy';
+  $('#result').hidden      = p !== 'done';
+  $('#stages').hidden      = p !== 'busy';
+  $('#vp-state').textContent = {idle:'取景中', preview:'已拍摄', busy:'分析中', done:'已归档'}[p];
+}
 
 function onPicked(f){
   if(!f) return;
   file = f;
-  $('#preview').src = URL.createObjectURL(f);
-  $('#preview-wrap').hidden = false;
+  const img = $('#preview');
+  img.src = URL.createObjectURL(f);
+  img.hidden = false;
+  $('#vp-empty').hidden = true;
+  $('#summary').hidden = true;
   showErr('');
-  $('#result').hidden = true;
+  setPhase('preview');
 }
+
+// 进度是按经验耗时推进的估计值，不是后端回调——一次 blocking 调用拿不到中间态，
+// 但等待期完全没反馈更糟。四段合计约 20 秒，跑完停在最后一段等真结果。
+function startStages(){
+  t0 = Date.now();
+  const marks = [2, 8, 16, 20];
+  $$('#stages .st').forEach(el => { el.className = 'st'; el.lastElementChild.textContent = '待执行'; });
+  timer = setInterval(() => {
+    const el = (Date.now() - t0) / 1000;
+    $('#remain').textContent = Math.max(1, Math.round(20 - el));
+    let cur = marks.findIndex(m => el < m);
+    if(cur === -1) cur = 3;
+    $$('#stages .st').forEach((n, i) => {
+      n.className = 'st' + (i < cur ? ' done' : i === cur ? ' on' : '');
+      n.lastElementChild.textContent = i < cur ? marks[i] + 's' : i === cur ? '进行中' : '待执行';
+    });
+    $('#bar').style.width = Math.min(96, 8 + el / 20 * 88) + '%';
+  }, 300);
+}
+function stopStages(){ clearInterval(timer); timer = null; }
+
+function showResult(j){
+  const lv = j.risk_level || '未知';
+  $('#verdict').innerHTML =
+    '<div class="top">' +
+      '<div class="badge ' + esc(lv) + '" style="background:' +
+        ({'高':'var(--hi)','中':'var(--mid)','低':'var(--lo)'}[lv] || 'var(--n600)') + '">' + esc(lv) + '风险</div>' +
+      '<div class="mid"><div style="font-family:var(--h);font-size:17px;line-height:1.15">' +
+        esc(siteLabel()) + '</div>' +
+      '<div style="font-size:11px;color:var(--n600);margin-top:2px" class="tnum">' +
+        new Date().toLocaleString('zh-CN', {hour12:false}).slice(0,16) +
+        ' · 用时 ' + ((Date.now() - t0)/1000).toFixed(1) + ' 秒</div></div>' +
+    '</div>';
+  const a = $('#btn-report');
+  if(j.report_url){ a.href = j.report_url; a.hidden = false; } else { a.hidden = true; }
+  $('#archived').textContent = '已存入台账 · ' + siteLabel();
+  if(j.summary){ $('#summary').innerHTML = corners() + md2html(j.summary); $('#summary').hidden = false; }
+  setPhase('done');
+  loadRecent();
+}
+
 $('#btn-shot').onclick = () => $('#cam').click();
 $('#btn-pick').onclick = () => $('#pick').click();
 $('#cam').onchange  = e => onPicked(e.target.files[0]);
 $('#pick').onchange = e => onPicked(e.target.files[0]);
-$('#btn-reset').onclick = () => {
-  file=null; $('#preview-wrap').hidden=true; $('#result').hidden=true; showErr('');
-  $('#cam').value=''; $('#pick').value='';
-};
+function reset(){
+  file = null; stopStages();
+  $('#preview').hidden = true; $('#preview').removeAttribute('src');
+  $('#vp-empty').hidden = false; $('#summary').hidden = true;
+  $('#cam').value = ''; $('#pick').value = '';
+  showErr(''); setPhase('idle');
+}
+$('#btn-reset').onclick = reset;
+$('#btn-again').onclick = reset;
 
 $('#btn-go').onclick = async () => {
-  const site = $('#site').value;
-  if(!site){ showErr('请先选择机组 / 位置——台账要按它归档。'); return; }
+  const id = siteId();
+  if(!id){ showErr('请先选择机组和位置——台账要按它归档。'); return; }
   if(!file){ showErr('还没有照片。'); return; }
-
-  const btn = $('#btn-go');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span>分析中，约 20 秒…';
   showErr('');
-
+  setPhase('busy');
+  startStages();
   try{
     const fd = new FormData();
     fd.append('file', file);
-    fd.append('site', site);
+    fd.append('site', id);
     const j = await api('/api/analyze', {method:'POST', body:fd});
-    $('#result').innerHTML = md2html(j.summary || '（工作流没有返回内容）');
-    $('#result').hidden = false;
-    $('#result').scrollIntoView({behavior:'smooth', block:'start'});
+    stopStages();
+    showResult(j);
   }catch(e){
+    stopStages();
+    setPhase('preview');
     showErr('分析失败：' + e.message);
-  }finally{
-    btn.disabled = false;
-    btn.textContent = '开始分析';
   }
 };
+
+renderPicker();
+setPhase('idle');
 </script>
 {% endblock %}

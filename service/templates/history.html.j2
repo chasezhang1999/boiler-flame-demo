@@ -2,136 +2,250 @@
 {% set page = "history" %}
 {% block title %}历史台账 · 锅炉运行分析助手{% endblock %}
 
+{% block head %}
+<style>
+  .wrap{padding:30px 40px 60px;display:flex;flex-direction:column;gap:20px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line)}
+  .kpi{padding:16px 18px;border-right:1px solid var(--line)}
+  .kpi:last-child{border-right:0}
+  .kpi .k{font-size:12px;color:var(--n700)}
+  .kpi .v{display:flex;align-items:baseline;gap:6px;margin-top:4px}
+  .kpi .v b{font-family:var(--h);font-weight:600;font-size:34px;line-height:1;font-variant-numeric:tabular-nums}
+  .kpi .v span{font-size:12px;color:var(--n600)}
+  .kpi .n{font-size:11px;color:var(--n600);margin-top:6px}
+  .two{display:grid;grid-template-columns:1.55fr 1fr;gap:20px;align-items:start}
+  .cardhd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+          border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:12px}
+  .cardhd h4{white-space:nowrap}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .sitebar{display:grid;grid-template-columns:minmax(90px,132px) minmax(0,1fr) 46px;gap:10px;
+           align-items:center;font-size:12.5px;padding:5px 0}
+  .sitebar .track{display:flex;height:14px;background:var(--n200)}
+  .sitebar .track i{display:block}
+  .legend{display:flex;gap:14px;margin-top:12px;font-size:11px;color:var(--n600)}
+  .legend i{width:9px;height:9px;display:block}
+  .scroller{overflow-x:auto}
+  table{min-width:840px}
+  td .scorebar{display:flex;align-items:center;gap:8px}
+  td .scorebar span.t{width:60px;height:6px;background:var(--n200);display:block;flex:none}
+  td .scorebar span.t i{display:block;height:6px}
+  @media(max-width:1100px){ .two{grid-template-columns:1fr} .kpis{grid-template-columns:repeat(2,1fr)}
+    .kpi{border-bottom:1px solid var(--line)} }
+  @media(max-width:900px){ .wrap{padding:20px 16px 48px} }
+</style>
+{% endblock %}
+
 {% block body %}
-<div class="card">
-  <div class="row">
+<div class="wrap">
+
+  <div class="head">
     <div>
-      <label for="site">机组 / 位置</label>
-      <select id="site">
-        <option value="">全部机组</option>
-        {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
-      </select>
+      <div class="kicker" id="range-kicker">Ledger — 最近 30 天 · 全部机组</div>
+      <h2 style="font-size:30px;margin:6px 0 0">历史台账</h2>
     </div>
-    <div>
-      <label for="days">时间范围</label>
-      <select id="days">
-        <option value="7">最近 7 天</option>
-        <option value="30" selected>最近 30 天</option>
-        <option value="90">最近 90 天</option>
-        <option value="0">全部</option>
-      </select>
-    </div>
-    <div>
-      <label for="metric">趋势指标</label>
-      <select id="metric">
-        <option value="temp_index_p95">相对亮温 P95</option>
-        <option value="flame_fill_ratio_pct">火焰充满度</option>
-        <option value="centroid_offset_total_pct">火焰中心偏斜</option>
-        <option value="high_temp_area_pct">高温区占比</option>
-        <option value="contour_circularity">轮廓圆度</option>
-        <option value="wall_hotspot_area_pct">贴壁亮斑面积</option>
-      </select>
+    <div class="tools noprint">
+      <div>
+        <label for="site">机组 / 位置</label>
+        <select id="site" style="min-width:190px">
+          <option value="">全部机组</option>
+          {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="days">时间范围</label>
+        <select id="days">
+          <option value="7">最近 7 天</option>
+          <option value="30" selected>最近 30 天</option>
+          <option value="90">最近 90 天</option>
+          <option value="0">全部</option>
+        </select>
+      </div>
+      <button id="btn-csv" class="btn" style="align-self:flex-end">导出 CSV</button>
+      <button id="btn-print" class="btn" style="align-self:flex-end">打印</button>
     </div>
   </div>
-  <div class="row" style="margin-top:12px">
-    <button id="btn-go">查询</button>
-    <button id="btn-csv" class="ghost">导出 CSV</button>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="two">
+    <div class="bp" style="padding:18px 20px">
+      <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+      <div class="cardhd">
+        <h4 id="metric-title">相对亮温 P95 趋势</h4>
+        <div class="chips noprint" id="metric-chips"></div>
+      </div>
+      <img id="chart" alt="趋势图" style="width:100%;display:block">
+      <div class="muted" style="font-size:11px;margin-top:6px">
+        浅蓝带＝参考区间，红点＝越出区间的读数。
+      </div>
+    </div>
+
+    <div class="bp" style="padding:18px 20px">
+      <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+      <div class="cardhd"><h4>各机位风险构成</h4></div>
+      <div id="bysite"><div class="muted">加载中…</div></div>
+      <div class="legend">
+        <span style="display:flex;align-items:center;gap:5px"><i style="background:var(--hi)"></i>高</span>
+        <span style="display:flex;align-items:center;gap:5px"><i style="background:var(--n300)"></i>中 / 低</span>
+      </div>
+    </div>
   </div>
-</div>
 
-<div id="stat" class="card" hidden></div>
-
-<div class="card">
-  <h2 style="font-size:16px;margin-bottom:10px">趋势</h2>
-  <img id="chart" style="width:100%;display:block" alt="趋势图">
-</div>
-
-<div class="card">
-  <h2 style="font-size:16px;margin-bottom:10px">分析记录</h2>
-  <div style="overflow-x:auto"><table id="tbl">
-    <thead><tr><th>时间</th><th>机组 / 位置</th><th>等级</th><th class="num">评分</th>
-      <th>结论</th><th>报告</th><th></th></tr></thead>
-    <tbody><tr><td colspan="7" class="muted">加载中…</td></tr></tbody>
-  </table></div>
+  <div class="bp" style="padding:18px 20px">
+    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+    <div class="cardhd">
+      <h4>分析记录 <span style="font-family:var(--b);font-size:12px;color:var(--n600)" id="count"></span></h4>
+      <div class="chips noprint" id="lv-chips"></div>
+    </div>
+    <div class="scroller">
+      <table id="tbl">
+        <thead><tr>
+          <th class="nowrap">时间</th><th class="nowrap">机组 / 位置</th><th class="nowrap">等级</th>
+          <th class="nowrap">评分</th><th style="min-width:240px">结论</th>
+          <th class="nowrap">超限 / 亮斑</th><th class="nowrap noprint"></th>
+        </tr></thead>
+        <tbody><tr><td colspan="7" class="muted">加载中…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block script %}
 <script>
-const $ = s => document.querySelector(s);
-const q = () => ({site:$('#site').value, days:$('#days').value, metric:$('#metric').value});
+const METRICS = [
+  ['temp_index_p95','相对亮温 P95'],
+  ['flame_fill_ratio_pct','火焰充满度'],
+  ['centroid_offset_total_pct','中心偏斜'],
+  ['high_temp_area_pct','高温区占比'],
+  ['contour_circularity','轮廓圆度'],
+  ['wall_hotspot_area_pct','贴壁亮斑面积'],
+];
+const LVBG = {'高':'var(--hi)','中':'var(--mid)','低':'var(--lo)'};
+let metric = 'temp_index_p95', lvFilter = '全部', rows = [];
 
-async function load(){
-  const {site, days, metric} = q();
-  const qs = new URLSearchParams({site, days}).toString();
+const q = () => ({site: $('#site').value, days: $('#days').value});
 
-  $('#chart').src = '/api/chart?' + new URLSearchParams({site, days, metric}) +
-                    '&_=' + Date.now();
+function renderChips(){
+  $('#metric-chips').innerHTML = METRICS.map(([k,l]) =>
+    '<button class="chip' + (k===metric?' on':'') + '" data-k="' + k + '">' + esc(l) + '</button>').join('');
+  $$('#metric-chips .chip').forEach(b => b.onclick = () => {
+    metric = b.dataset.k;
+    $('#metric-title').textContent = METRICS.find(m => m[0]===metric)[1] + ' 趋势';
+    renderChips(); drawChart();
+  });
+  $('#lv-chips').innerHTML = ['全部','高','中','低'].map(l =>
+    '<button class="chip' + (l===lvFilter?' on':'') + '" data-l="' + l + '">' + l + '</button>').join('');
+  $$('#lv-chips .chip').forEach(b => b.onclick = () => { lvFilter = b.dataset.l; renderChips(); renderTable(); });
+}
 
-  const s = await api('/api/summary?' + qs);
-  $('#stat').hidden = false;
-  if(!s.total){
-    $('#stat').innerHTML = '<div class="muted">该条件下台账里还没有记录。</div>';
-  } else {
-    const lv = s.levels || {};
-    $('#stat').innerHTML =
-      '<div class="row" style="align-items:baseline">' +
-      '<div><div class="muted">分析次数</div><div style="font:600 26px var(--h)">' + s.total + '</div></div>' +
-      ['高','中','低'].map(k =>
-        '<div><div class="muted">' + k + '风险</div><div style="font:600 26px var(--h)">' +
-        (lv[k]||0) + '</div></div>').join('') +
-      '<div style="flex:2"><div class="muted">最近一次</div><div>' +
-        (s.latest ? esc(s.latest.ts) + '　<span class="lv ' + esc(s.latest.risk_level) + '">' +
-          esc(s.latest.risk_level) + '</span>' : '—') + '</div></div>' +
-      '</div>';
-  }
+function drawChart(){
+  const {site, days} = q();
+  $('#chart').src = '/api/chart?' + new URLSearchParams({site, days, metric}) + '&_=' + Date.now();
+}
 
-  const h = await api('/api/history?' + qs + '&limit=200');
+function kpi(k, v, unit, note, color){
+  return '<div class="kpi"><div class="k">' + esc(k) + '</div>' +
+    '<div class="v"><b style="color:' + (color||'var(--ink)') + '">' + esc(v) + '</b>' +
+    '<span>' + esc(unit||'') + '</span></div>' +
+    '<div class="n">' + (note||'') + '</div></div>';
+}
+
+async function loadSummary(){
+  const {site, days} = q();
+  const s = await api('/api/summary?' + new URLSearchParams({site, days}));
+  $('#range-kicker').textContent = 'Ledger — ' +
+    (days === '0' ? '全部记录' : '最近 ' + days + ' 天') + ' · ' + (s.site_label || '全部机组');
+  const lv = s.levels || {}, t = s.total || 0;
+  const pct = n => t ? ' · 占 ' + (n / t * 100).toFixed(1) + '%' : '';
+  $('#kpis').innerHTML =
+    kpi('分析次数', t, '次', s.days ? '统计口径 ' + s.days + ' 天' : '全部记录') +
+    kpi('高风险', lv['高']||0, '次', pct(lv['高']||0), 'var(--hi)') +
+    kpi('中风险', lv['中']||0, '次', pct(lv['中']||0), 'var(--mid)') +
+    kpi('低风险', lv['低']||0, '次', pct(lv['低']||0), 'var(--lo)') +
+    kpi('最近一次', s.latest ? s.latest.ts.slice(11,16) : '—', s.latest ? s.latest.ts.slice(0,10) : '',
+        s.latest ? esc(s.latest.headline || '') : '台账里还没有记录');
+}
+
+async function loadBySite(){
+  const {days} = q();
+  const j = await api('/api/by_site?' + new URLSearchParams({days}));
+  const box = $('#bysite');
+  if(!j.rows.length){ box.innerHTML = '<div class="muted">该条件下没有记录。</div>'; return; }
+  box.innerHTML = j.rows.slice(0, 8).map(r => {
+    const high = r.high || 0, rest = Math.max((r.n || 0) - high, 0), total = high + rest || 1;
+    return '<div class="sitebar"><span style="color:var(--n800);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+      esc(r.label) + '</span><span class="track">' +
+      '<i style="width:' + (high/total*100).toFixed(1) + '%;background:var(--hi)"></i>' +
+      '<i style="width:' + (rest/total*100).toFixed(1) + '%;background:var(--n300)"></i>' +
+      '</span><span class="tnum" style="text-align:right;color:var(--n600)">' + (r.n||0) + ' 次</span></div>';
+  }).join('');
+}
+
+function renderTable(){
   const tb = $('#tbl tbody');
-  if(!h.rows.length){
+  const list = rows.filter(r => lvFilter === '全部' || r.risk_level === lvFilter);
+  $('#count').textContent = list.length + ' 条';
+  if(!list.length){
     tb.innerHTML = '<tr><td colspan="7" class="muted">没有记录。先去「拍照分析」跑几次。</td></tr>';
     return;
   }
-  tb.innerHTML = h.rows.map(r =>
+  tb.innerHTML = list.map(r =>
     '<tr data-id="' + r.id + '">' +
-    '<td style="white-space:nowrap">' + esc(r.ts) + '</td>' +
-    '<td>' + esc(r.site_label) + '</td>' +
-    '<td><span class="lv ' + esc(r.risk_level) + '">' + esc(r.risk_level) + '</span></td>' +
-    '<td class="num">' + (r.score==null?'—':r.score) + '</td>' +
-    '<td>' + esc(r.headline||'') + '</td>' +
-    '<td>' + (r.report_url ? '<a href="'+esc(r.report_url)+'" target="_blank">打开</a>' : '—') + '</td>' +
-    '<td><button class="del" title="删除这条记录">删除</button></td>' +
+    '<td class="nowrap tnum" style="color:var(--n700)">' + esc(r.ts) + '</td>' +
+    '<td class="nowrap">' + esc(r.site_label) + '</td>' +
+    '<td><span class="lv ' + esc(r.risk_level||'未知') + '">' + esc(r.risk_level||'未知') + '</span></td>' +
+    '<td class="nowrap"><span class="scorebar"><span class="t"><i style="width:' +
+      (r.score==null?0:r.score) + '%;background:' + (LVBG[r.risk_level]||'var(--n600)') + '"></i></span>' +
+      '<span class="tnum" style="font-size:13px">' + (r.score==null?'—':r.score) + '</span></span></td>' +
+    '<td style="color:var(--n800)">' + esc(r.headline||'') + '</td>' +
+    '<td class="nowrap tnum" style="font-size:13px;color:var(--n700)">' +
+      (r.abnormal_count||0) + ' / ' + (r.wall_hotspot_count||0) + '</td>' +
+    '<td class="nowrap noprint">' +
+      (r.report_url ? '<a href="' + esc(r.report_url) + '" target="_blank" style="font-size:13px">报告</a>' : '<span class="muted">—</span>') +
+      ' <span style="color:var(--n300)">·</span> ' +
+      '<a href="#" class="del" style="font-size:13px;color:var(--n700)">删除</a></td>' +
     '</tr>').join('');
-
-  tb.querySelectorAll('.del').forEach(b => b.onclick = () => del(b));
+  $$('#tbl .del').forEach(a => a.onclick = ev => { ev.preventDefault(); del(a); });
 }
 
-async function del(btn){
-  const tr = btn.closest('tr');
+async function del(link){
+  const tr = link.closest('tr');
   const id = tr.dataset.id;
-  const when = tr.children[0].textContent, where = tr.children[1].textContent;
   // 删除连带清掉报告页和两张图，不可撤销，所以要确认
-  if(!confirm('删除这条记录？\n\n' + where + '　' + when +
+  if(!confirm('删除这条记录？\n\n' + tr.children[1].textContent + '　' + tr.children[0].textContent +
               '\n\n报告页和分析图会一起删除，不可恢复。')) return;
-  btn.disabled = true;
-  btn.textContent = '…';
+  link.textContent = '…';
   try{
     await api('/api/history/' + id, {method:'DELETE'});
-    tr.remove();
-    load();                       // 统计和趋势图跟着刷新
+    load();
+  }catch(e){ alert('删除失败：' + e.message); link.textContent = '删除'; }
+}
+
+async function load(){
+  drawChart();
+  try{
+    await loadSummary();
+    await loadBySite();
+    const {site, days} = q();
+    const h = await api('/api/history?' + new URLSearchParams({site, days, limit:200}));
+    rows = h.rows;
+    renderTable();
   }catch(e){
-    alert('删除失败：' + e.message);
-    btn.disabled = false;
-    btn.textContent = '删除';
+    $('#tbl tbody').innerHTML = '<tr><td colspan="7" class="err">读取失败：' + esc(e.message) + '</td></tr>';
   }
 }
 
-$('#btn-go').onclick = load;
 $('#btn-csv').onclick = () => {
   const {site, days} = q();
   location.href = '/api/ledger.csv?' + new URLSearchParams({site, days});
 };
-['site','days','metric'].forEach(id => $('#'+id).onchange = load);
+$('#btn-print').onclick = () => window.print();
+['site','days'].forEach(id => $('#'+id).onchange = load);
+
+renderChips();
 load();
 </script>
 {% endblock %}

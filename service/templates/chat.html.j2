@@ -2,90 +2,176 @@
 {% set page = "chat" %}
 {% block title %}历史问答 · 锅炉运行分析助手{% endblock %}
 
+{% block head %}
+<style>
+  .chat{display:grid;grid-template-columns:250px minmax(0,1fr) 320px;align-items:stretch;
+        height:calc(100vh - 51px);min-height:0}
+  .rail{border-right:1px solid var(--line);padding:22px 20px;display:flex;flex-direction:column;gap:20px;overflow:auto}
+  .rail .kv{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding-bottom:6px;font-size:13px}
+  .rail .kv:last-child{border-bottom:0}
+  .sug{border:1px solid var(--line);padding:8px 10px;font-size:13px;cursor:pointer;color:var(--n800);
+       text-wrap:pretty;background:transparent;text-align:left;width:100%;font-family:var(--b);line-height:1.4}
+  .sug:hover{background:rgba(89,128,166,.08);border-color:var(--accent)}
+  .center{display:flex;flex-direction:column;min-height:0}
+  .log{flex:1;overflow:auto;padding:24px 32px;display:flex;flex-direction:column;gap:22px}
+  .msg{display:flex;flex-direction:column;gap:6px;max-width:74ch}
+  .msg.me{align-self:flex-end;align-items:flex-end;max-width:62ch}
+  .msg .who{font-family:var(--h);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-700)}
+  .msg.me .who{color:var(--n600)}
+  .msg .body{border-left:2px solid var(--accent);padding:2px 0 2px 16px;font-size:14.5px;line-height:1.65}
+  .msg.me .body{border:1px solid var(--line);border-left-width:1px;background:rgba(29,31,32,.05);padding:12px 16px}
+  .cites{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .cites a{border:1px solid var(--line);padding:2px 8px;font-size:11.5px;color:var(--n700);
+           white-space:nowrap;text-decoration:none}
+  .cites a:hover{border-color:var(--accent);color:var(--accent-700)}
+  .composer{border-top:1px solid var(--line);padding:14px 32px 20px;display:flex;flex-direction:column;gap:8px}
+  .composer .row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end}
+  .ev{border-left:1px solid var(--line);padding:22px 20px;display:flex;flex-direction:column;gap:18px;
+      overflow:auto;background:var(--tint)}
+  .ev .item{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
+  .ev .item:last-child{border-bottom:0}
+  @media(max-width:1200px){ .chat{grid-template-columns:220px minmax(0,1fr)} .ev{display:none} }
+  @media(max-width:900px){
+    .chat{grid-template-columns:1fr;height:auto}
+    .rail{border-right:0;border-bottom:1px solid var(--line)}
+    .log{padding:18px 16px}.composer{padding:12px 16px 18px}
+  }
+</style>
+{% endblock %}
+
 {% block body %}
-<div class="card">
-  <div class="row">
-    <div style="flex:2">
-      <label for="site">限定机组（可不选，问题里点名也能识别）</label>
-      <select id="site">
-        <option value="">不限定</option>
-        {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
-      </select>
+<div class="chat">
+
+  <div class="rail noprint">
+    <div>
+      <div class="eyebrow" style="margin-bottom:8px">查询范围</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div>
+          <label for="site">机组（问题里点名也能识别）</label>
+          <select id="site">
+            <option value="">不限定</option>
+            {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div style="margin-top:6px">
+          <label for="days">时间</label>
+          <select id="days">
+            <option value="7">最近 7 天</option>
+            <option value="30" selected>最近 30 天</option>
+            <option value="90">最近 90 天</option>
+          </select>
+        </div>
+        <div class="kv" style="margin-top:8px"><span style="color:var(--n700)">台账记录</span><b id="rec-count" class="tnum">—</b></div>
+      </div>
     </div>
     <div>
-      <label for="days">时间范围</label>
-      <select id="days">
-        <option value="7">最近 7 天</option>
-        <option value="30" selected>最近 30 天</option>
-        <option value="90">最近 90 天</option>
-      </select>
+      <div class="eyebrow" style="margin-bottom:8px">常问</div>
+      <div style="display:flex;flex-direction:column;gap:6px" id="suggests"></div>
+    </div>
+    <div style="margin-top:auto;font-size:11px;color:var(--n600);text-wrap:pretty">
+      只依据台账记录作答，数据里没有的会直说，不推测、不编造。
     </div>
   </div>
-</div>
 
-<div id="log"></div>
+  <div class="center">
+    <div class="log" id="log"></div>
+    <div class="composer noprint">
+      <div class="row">
+        <textarea id="q" rows="2" placeholder="例如：3号机组最近结焦风险怎么样？哪台机组高风险最多？" style="min-height:56px;font-size:14.5px"></textarea>
+        <button id="send" class="btn primary" style="height:56px;padding-inline:26px;font-size:15px">发送</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <span class="muted" style="font-size:11px">⌘/Ctrl + Enter 发送 · 回答里的记录条可点开对应报告</span>
+        <a href="#" id="clear" class="muted" style="font-size:11px">清空对话</a>
+      </div>
+      <div id="err" class="err" hidden></div>
+    </div>
+  </div>
 
-<div class="card">
-  <textarea id="q" rows="2" placeholder="例如：3号机组最近结焦风险怎么样？哪台机组高风险最多？"></textarea>
-  <div class="row" style="margin-top:10px">
-    <button id="send" style="flex:2">发送</button>
-    <button id="clear" class="ghost">清空</button>
+  <div class="ev noprint">
+    <div>
+      <div class="kicker">Evidence — 本次回答的依据</div>
+      <div style="font-size:12px;color:var(--n700);margin-top:4px">模型只看到下面这些台账记录。</div>
+    </div>
+    <div style="border:1px solid var(--line)" id="evidence">
+      <div class="item"><span class="muted">提问后显示。</span></div>
+    </div>
+    <div style="border:1px solid var(--line);padding:12px;font-size:12px;color:var(--n700);text-wrap:pretty">
+      <div class="eyebrow" style="margin-bottom:6px">口径</div>
+      风险等级为模型判级；相对亮温未标定；参考区间为 demo 期经验值。问题里点名机组时后端自动识别机位，无需先选。
+    </div>
   </div>
-  <div class="muted" style="margin-top:10px">
-    只依据台账里的历史记录回答，不会编造数据。台账为空时会如实说明。
-  </div>
-  <div id="err" class="err" hidden></div>
+
 </div>
 {% endblock %}
 
 {% block script %}
 <script>
-const $ = s => document.querySelector(s);
-
 const SUGGEST = [
   '哪台机组高风险最多？',
   '3号机组最近结焦风险怎么样？',
   '最近一次高风险是什么时候，什么原因？',
+  '贴壁亮斑出现最频繁的机位是哪个？',
+  '这个月和上个月比，风险是升还是降？',
 ];
 
-function bubble(who, html){
+function msg(who, html, me){
   const d = document.createElement('div');
-  d.className = 'card';
-  d.style.borderLeft = '3px solid ' + (who==='我' ? 'var(--line)' : 'var(--accent)');
-  d.innerHTML = '<div class="muted" style="margin-bottom:6px">' + who + '</div>' +
-                '<div class="md">' + html + '</div>';
+  d.className = 'msg' + (me ? ' me' : '');
+  d.innerHTML = '<div class="who">' + who + '</div><div class="body md">' + html + '</div>';
   $('#log').appendChild(d);
-  d.scrollIntoView({behavior:'smooth', block:'nearest'});
+  $('#log').scrollTop = $('#log').scrollHeight;
   return d;
 }
 
-function suggestions(){
-  if($('#log').children.length) return;
-  const d = document.createElement('div');
-  d.className = 'card';
-  d.innerHTML = '<div class="muted" style="margin-bottom:8px">试试这些问题</div>' +
-    SUGGEST.map(s => '<button class="ghost sug" style="margin:0 8px 8px 0;flex:none;' +
-      'font-size:14px;padding:8px 12px">' + esc(s) + '</button>').join('');
-  $('#log').appendChild(d);
-  d.querySelectorAll('.sug').forEach(b => b.onclick = () => {
-    $('#q').value = b.textContent; send();
-  });
+function renderSuggests(){
+  $('#suggests').innerHTML = SUGGEST.map(s => '<button class="sug">' + esc(s) + '</button>').join('');
+  $$('#suggests .sug').forEach(b => b.onclick = () => { $('#q').value = b.textContent; send(); });
+}
+
+async function refreshCount(){
+  try{
+    const j = await api('/api/summary?' + new URLSearchParams({site:$('#site').value, days:$('#days').value}));
+    $('#rec-count').textContent = (j.total || 0) + ' 条';
+  }catch(e){ $('#rec-count').textContent = '—'; }
+}
+
+// 证据面板取的是同一份台账：后端问答也是从 /api/ledger_bundle 拿这批记录
+async function refreshEvidence(site){
+  const box = $('#evidence');
+  try{
+    const j = await api('/api/history?' + new URLSearchParams({site: site || '', days: $('#days').value, limit: 5}));
+    if(!j.rows.length){ box.innerHTML = '<div class="item"><span class="muted">该范围内没有记录。</span></div>'; return; }
+    box.innerHTML = j.rows.map(r =>
+      '<div class="item">' +
+      '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--n600)" class="tnum">' +
+        '<span>' + esc(r.ts.slice(5,16)) + '</span>' +
+        '<span class="lv ' + esc(r.risk_level||'未知') + '">' + esc(r.risk_level||'未知') + '</span></div>' +
+      '<div style="font-size:12.5px">' + esc(r.site_label) + '</div>' +
+      '<div style="font-size:12px;color:var(--n700);text-wrap:pretty">' + esc(r.headline||'—') + '</div>' +
+      (r.report_url ? '<a href="' + esc(r.report_url) + '" target="_blank" style="font-size:11.5px">打开报告</a>' : '') +
+      '</div>').join('');
+  }catch(e){ box.innerHTML = '<div class="item"><span class="muted">读取失败。</span></div>'; }
+}
+
+async function cites(site){
+  try{
+    const j = await api('/api/history?' + new URLSearchParams({site: site || '', days: $('#days').value, limit: 3}));
+    if(!j.rows.length) return '';
+    return '<div class="cites">' + j.rows.map(r =>
+      '<a href="' + esc(r.report_url || '#') + '" target="_blank">' + esc(r.ts.slice(5,16)) + ' · ' +
+      esc(r.risk_level||'未知') + ' ' + (r.score==null?'':r.score) + '</a>').join('') + '</div>';
+  }catch(e){ return ''; }
 }
 
 async function send(){
   const question = $('#q').value.trim();
   if(!question) return;
   $('#err').hidden = true;
-  $('#log').querySelectorAll('.card').forEach(c => {
-    if(c.querySelector('.sug')) c.remove();       // 提过问就把建议撤掉
-  });
-
-  bubble('我', '<p>' + esc(question) + '</p>');
+  msg('我', '<p>' + esc(question) + '</p>', true);
   $('#q').value = '';
-  const btn = $('#send');
-  btn.disabled = true;
-  const holder = bubble('助手', '<p class="muted"><span class="spin" ' +
-    'style="border-color:var(--accent);border-top-color:transparent"></span>查台账中…</p>');
+  $('#send').disabled = true;
+  const holder = msg('助手', '<p class="muted"><span class="spin"></span> 正在检索台账…</p>');
 
   try{
     const j = await api('/api/chat', {
@@ -97,21 +183,28 @@ async function send(){
       html += '<img src="' + esc(j.chart_url) + '" alt="趋势图">' +
               '<em>' + esc(j.site_label) + ' · 最近 ' + j.days + ' 天相对亮温 P95</em>';
     }
-    holder.querySelector('.md').innerHTML = html;
+    html += await cites(j.site);
+    holder.querySelector('.body').innerHTML = html;
+    refreshEvidence(j.site);
   }catch(e){
     holder.remove();
     $('#err').textContent = '出错了：' + e.message;
     $('#err').hidden = false;
   }finally{
-    btn.disabled = false;
+    $('#send').disabled = false;
+    $('#log').scrollTop = $('#log').scrollHeight;
   }
 }
 
 $('#send').onclick = send;
-$('#clear').onclick = () => { $('#log').innerHTML=''; suggestions(); };
+$('#clear').onclick = ev => { ev.preventDefault(); $('#log').innerHTML = ''; };
 $('#q').addEventListener('keydown', e => {
-  if(e.key==='Enter' && (e.metaKey||e.ctrlKey)) send();
+  if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send();
 });
-suggestions();
+['site','days'].forEach(id => $('#'+id).onchange = () => { refreshCount(); refreshEvidence($('#site').value); });
+
+renderSuggests();
+refreshCount();
+refreshEvidence('');
 </script>
 {% endblock %}
