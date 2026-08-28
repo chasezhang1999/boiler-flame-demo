@@ -105,10 +105,28 @@ def main():
     a = ap.parse_args()
 
     g = json.load(open(a.graph, encoding="utf-8"))
+
+    # 先把上一轮加的节点全部摘掉，再从干净的七节点重建 —— 这样脚本可以反复跑，
+    # 导入过一次之后再导出的 graph 也能拿来重新生成。
+    ADDED = {"check_node", "gate_node", "reject_node", "reject_end", "merge_node"}
+    g["nodes"] = [n for n in g["nodes"] if n["id"] not in ADDED]
+    g["edges"] = [e for e in g["edges"]
+                  if e["source"] not in ADDED and e["target"] not in ADDED]
     nodes = {n["id"]: n for n in g["nodes"]}
-    if "check_node" in nodes:
-        print("已经有 check_node 了，不重复插入。")
-        return 0
+
+    # 主链路用绝对坐标，别用相对位移 —— 反复跑会一路往右漂
+    for nid, x, y in (("start_node", 40, 260), ("http_node", 950, 120),
+                      ("parse_node", 1260, 120), ("llm_node", 1570, 120),
+                      ("report_node", 1880, 120), ("finish_node", 2190, 120),
+                      ("end_node", 2810, 120)):
+        if nid in nodes:
+            nodes[nid]["position"] = {"x": x, "y": y}
+            nodes[nid]["positionAbsolute"] = {"x": x, "y": y}
+
+    # 主链路的边可能在上一轮被改过，统一重建
+    MAIN = [("start_node", "http_node"), ("finish_node", "end_node")]
+    g["edges"] = [e for e in g["edges"]
+                  if (e["source"], e["target"]) not in MAIN]
 
     llm = nodes["llm_node"]
     model_cfg = copy.deepcopy(llm["data"]["model"])
@@ -157,37 +175,45 @@ def main():
             "risk_level": {"type": "string", "children": None},
         },
         "dependencies": [],
-    }, 950, 180, h=54))
+    }, 2190, 300, h=54))
 
-    g["nodes"].append(node("reject_end", {
-        "desc": "", "selected": False, "title": "结束（未分析）", "type": "end",
-        "outputs": [
-            {"variable": "summary", "value_type": "string",
-             "value_selector": ["reject_node", "summary"]},
-            {"variable": "report_url", "value_type": "string",
-             "value_selector": ["reject_node", "report_url"]},
-            {"variable": "risk_level", "value_type": "string",
-             "value_selector": ["reject_node", "risk_level"]},
-        ],
-    }, 1260, 180, h=142))
+    # 4) 变量聚合器：两条分支合流后进同一个结束节点。
+    #
+    #    不能给否分支单独配一个结束节点 —— Dify 会把所有结束节点的输出并成
+    #    一张表，两个节点都叫 summary/report_url/risk_level 就报「结束参数重复」。
+    OUTS = ("summary", "report_url", "risk_level")
+    g["nodes"].append(node("merge_node", {
+        "desc": "两条分支的输出合流", "selected": False,
+        "title": "汇合", "type": "variable-aggregator",
+        "output_type": "string",
+        "variables": [["finish_node", "summary"], ["reject_node", "summary"]],
+        "advanced_settings": {
+            "group_enabled": True,
+            "groups": [
+                {"groupId": "g-%s" % k, "group_name": k, "output_type": "string",
+                 "variables": [["finish_node", k], ["reject_node", k]]}
+                for k in OUTS
+            ],
+        },
+    }, 2500, 120, h=180))
 
-    # 4) 重接线：原来的 开始→CV分析 改成 开始→校验→分支→CV分析
-    g["edges"] = [e for e in g["edges"]
-                  if not (e["source"] == "start_node" and e["target"] == "http_node")]
+    # 结束节点改为从聚合器取值
+    nodes["end_node"]["data"]["outputs"] = [
+        {"variable": k, "value_type": "string",
+         "value_selector": ["merge_node", k, "output"]}
+        for k in OUTS
+    ]
+
+    # 5) 接线：开始→校验→分支，两条分支再汇合进结束
     g["edges"] += [
         edge("start_node", "check_node", "start", "llm"),
         edge("check_node", "gate_node", "llm", "if-else"),
         edge("gate_node", "http_node", "if-else", "http-request", handle="true"),
         edge("gate_node", "reject_node", "if-else", "code", handle="false"),
-        edge("reject_node", "reject_end", "code", "end"),
+        edge("finish_node", "merge_node", "code", "variable-aggregator"),
+        edge("reject_node", "merge_node", "code", "variable-aggregator"),
+        edge("merge_node", "end_node", "variable-aggregator", "end"),
     ]
-
-    # 原有节点整体右移，给新节点腾地方
-    for nid in ("http_node", "parse_node", "llm_node", "report_node",
-                "finish_node", "end_node"):
-        if nid in nodes:
-            nodes[nid]["position"]["x"] += 620
-            nodes[nid]["positionAbsolute"]["x"] += 620
 
     dsl = {
         "app": {

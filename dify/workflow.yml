@@ -55,11 +55,11 @@ workflow:
       height: 161
       id: start_node
       position:
-        x: 23.937133733958433
-        y: 239
+        x: 40
+        y: 260
       positionAbsolute:
-        x: 23.937133733958433
-        y: 239
+        x: 40
+        y: 260
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -102,11 +102,11 @@ workflow:
       height: 150
       id: http_node
       position:
-        x: 960
-        y: 260
+        x: 950
+        y: 120
       positionAbsolute:
-        x: 960
-        y: 260
+        x: 950
+        y: 120
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -142,11 +142,11 @@ workflow:
       height: 94
       id: parse_node
       position:
-        x: 1270
-        y: 260
+        x: 1260
+        y: 120
       positionAbsolute:
-        x: 1270
-        y: 260
+        x: 1260
+        y: 120
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -207,11 +207,11 @@ workflow:
       height: 130
       id: llm_node
       position:
-        x: 1580
-        y: 260
+        x: 1570
+        y: 120
       positionAbsolute:
-        x: 1580
-        y: 260
+        x: 1570
+        y: 120
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -269,11 +269,11 @@ workflow:
       height: 150
       id: report_node
       position:
-        x: 1890
-        y: 260
+        x: 1880
+        y: 120
       positionAbsolute:
-        x: 1890
-        y: 260
+        x: 1880
+        y: 120
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -309,11 +309,11 @@ workflow:
       height: 78
       id: finish_node
       position:
-        x: 2200
-        y: 260
+        x: 2190
+        y: 120
       positionAbsolute:
-        x: 2200
-        y: 260
+        x: 2190
+        y: 120
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -329,26 +329,29 @@ workflow:
         - variable: summary
           value_type: string
           value_selector:
-          - finish_node
+          - merge_node
           - summary
+          - output
         - variable: report_url
           value_type: string
           value_selector:
-          - finish_node
+          - merge_node
           - report_url
+          - output
         - variable: risk_level
           value_type: string
           value_selector:
-          - finish_node
+          - merge_node
           - risk_level
+          - output
       height: 139
       id: end_node
       position:
-        x: 2510
-        y: 260
+        x: 2810
+        y: 120
       positionAbsolute:
-        x: 2510
-        y: 260
+        x: 2810
+        y: 120
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -466,45 +469,62 @@ workflow:
       height: 54
       id: reject_node
       position:
-        x: 950
-        y: 180
+        x: 2190
+        y: 300
       positionAbsolute:
-        x: 950
-        y: 180
+        x: 2190
+        y: 300
       selected: false
       sourcePosition: right
       targetPosition: left
       type: custom
       width: 244
     - data:
-        desc: ''
+        desc: 两条分支的输出合流
         selected: false
-        title: 结束（未分析）
-        type: end
-        outputs:
-        - variable: summary
-          value_type: string
-          value_selector:
-          - reject_node
+        title: 汇合
+        type: variable-aggregator
+        output_type: string
+        variables:
+        - - finish_node
           - summary
-        - variable: report_url
-          value_type: string
-          value_selector:
-          - reject_node
-          - report_url
-        - variable: risk_level
-          value_type: string
-          value_selector:
-          - reject_node
-          - risk_level
-      height: 142
-      id: reject_end
+        - - reject_node
+          - summary
+        advanced_settings:
+          group_enabled: true
+          groups:
+          - groupId: g-summary
+            group_name: summary
+            output_type: string
+            variables:
+            - - finish_node
+              - summary
+            - - reject_node
+              - summary
+          - groupId: g-report_url
+            group_name: report_url
+            output_type: string
+            variables:
+            - - finish_node
+              - report_url
+            - - reject_node
+              - report_url
+          - groupId: g-risk_level
+            group_name: risk_level
+            output_type: string
+            variables:
+            - - finish_node
+              - risk_level
+            - - reject_node
+              - risk_level
+      height: 180
+      id: merge_node
       position:
-        x: 1260
-        y: 180
+        x: 2500
+        y: 120
       positionAbsolute:
-        x: 1260
-        y: 180
+        x: 2500
+        y: 120
       selected: false
       sourcePosition: right
       targetPosition: left
@@ -562,18 +582,6 @@ workflow:
     - data:
         isInIteration: false
         isInLoop: false
-        sourceType: code
-        targetType: end
-      id: e6
-      source: finish_node
-      sourceHandle: source
-      target: end_node
-      targetHandle: target
-      type: custom
-      zIndex: 0
-    - data:
-        isInIteration: false
-        isInLoop: false
         sourceType: start
         targetType: llm
       id: start_node-source-check_node
@@ -623,15 +631,39 @@ workflow:
         isInIteration: false
         isInLoop: false
         sourceType: code
-        targetType: end
-      id: reject_node-source-reject_end
+        targetType: variable-aggregator
+      id: finish_node-source-merge_node
+      source: finish_node
+      sourceHandle: source
+      target: merge_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: variable-aggregator
+      id: reject_node-source-merge_node
       source: reject_node
       sourceHandle: source
-      target: reject_end
+      target: merge_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: variable-aggregator
+        targetType: end
+      id: merge_node-source-end_node
+      source: merge_node
+      sourceHandle: source
+      target: end_node
       targetHandle: target
       type: custom
       zIndex: 0
     viewport:
-      x: -349.52089327076965
-      y: 165.81349244387962
-      zoom: 0.7578582832551991
+      x: -183.8617958038335
+      y: 286.21304791791033
+      zoom: 0.43527528164806234
