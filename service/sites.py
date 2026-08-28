@@ -86,6 +86,46 @@ def resolve(value: str):
     return hits[0] if len(hits) == 1 else None
 
 
+# 机组级别（一台机组下辖多个机位）。「3号机组最近怎么样」问的是整台机组，
+# 这是最自然的问法，只能定位到单个机位的话会退回全量台账，答非所问。
+UNITS = [{"id": uid, "label": unit} for uid, unit, _ in _RAW]
+BY_UNIT = {u["id"]: u for u in UNITS}
+
+
+def resolve_scope(value: str) -> dict:
+    """
+    把一段文字解析成查询范围。三种结果：
+
+      {"kind":"site", "id":"u3-b", "label":"3号机组 · B层燃烧器"}   具体机位
+      {"kind":"unit", "id":"u3",   "label":"3号机组（全部机位）"}    整台机组
+      {"kind":"all",  "id":"",     "label":"全部机组"}             没点名
+
+    先找机位再找机组：说了「3号机组B层」就该定位到那个机位，
+    只说「3号机组」才按整台算。
+    """
+    s = resolve(value)
+    if s:
+        return {"kind": "site", "id": s["id"], "label": s["label"]}
+
+    v = str(value or "").strip()
+    if v in BY_UNIT:
+        u = BY_UNIT[v]
+        return {"kind": "unit", "id": u["id"], "label": u["label"] + "（全部机位）"}
+
+    flat = v.replace(" ", "").replace("·", "").replace("-", "")
+    hits = [u for u in UNITS if u["label"] in flat]
+    if len(hits) == 1:
+        return {"kind": "unit", "id": hits[0]["id"],
+                "label": hits[0]["label"] + "（全部机位）"}
+    return {"kind": "all", "id": "", "label": "全部机组"}
+
+
 def label_of(site_id: str) -> str:
+    """机位 id、机组 id 都认，方便台账里的记录和筛选条件共用一个显示函数。"""
     s = BY_ID.get(site_id)
-    return s["label"] if s else (site_id or "未指定")
+    if s:
+        return s["label"]
+    u = BY_UNIT.get(site_id)
+    if u:
+        return u["label"] + "（全部机位）"
+    return site_id or "未指定"

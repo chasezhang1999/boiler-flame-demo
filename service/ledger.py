@@ -92,11 +92,24 @@ def record(site: str, ctx: dict, metrics: dict, report_url: str, ts: str = "") -
         return cur.lastrowid
 
 
+def _site_cond(site: str):
+    """
+    site 可以是机位 id（u3-b）也可以是机组 id（u3）。
+    机组按前缀匹配它下面所有机位 —— 「3号机组最近怎么样」问的是整台机组。
+    """
+    if not site:
+        return None, []
+    if "-" in site:
+        return "site = ?", [site]
+    return "site LIKE ?", [site + "-%"]
+
+
 def _where(site: str = "", days: int = 0):
     sql, args = [], []
-    if site:
-        sql.append("site = ?")
-        args.append(site)
+    cond, cargs = _site_cond(site)
+    if cond:
+        sql.append(cond)
+        args.extend(cargs)
     if days:
         # SQLite 的 now 恒为 UTC，而 ts 存的是本地时间（容器 TZ=Asia/Shanghai）。
         # 不加 localtime 的话「最近 N 天」会偏一个时区的量。
@@ -127,9 +140,10 @@ def series(site: str, metric: str, days: int = 30) -> list:
         raise ValueError("不支持的指标：%s（可用：%s）" % (metric, ", ".join(FLAT)))
 
     conds, args = ["%s IS NOT NULL" % metric], []
-    if site:
-        conds.append("site = ?")
-        args.append(site)
+    cond, cargs = _site_cond(site)
+    if cond:
+        conds.append(cond)
+        args.extend(cargs)
     if days:
         conds.append("ts >= datetime('now', 'localtime', ?)")
         args.append("-%d days" % int(days))

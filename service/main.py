@@ -294,12 +294,14 @@ def _ledger_bundle(question: str, site_hint: str = "", days: int = 30) -> dict:
     机组识别放在这里而不是 Dify 的参数提取节点：sites.resolve() 已经能从
     「3号机组B层」这类说法里认出位置，多一个 LLM 节点只会多一处失败点。
     """
-    site = sites.resolve(site_hint) or sites.resolve(question)
-    site_id = site["id"] if site else ""
+    scope = sites.resolve_scope(site_hint)
+    if scope["kind"] == "all":
+        scope = sites.resolve_scope(question)
+    site_id = scope["id"]
 
     data = {
         "查询范围": "最近 %d 天" % days,
-        "机组": site["label"] if site else "全部机组",
+        "机组": scope["label"],
         "汇总": ledger.summary(site_id, days),
         "各机组对比": ledger.by_site(days)[:12],
         "最近记录": ledger.history(site_id, days, 12),
@@ -311,8 +313,17 @@ def _ledger_bundle(question: str, site_hint: str = "", days: int = 30) -> dict:
     for r in data["最近记录"]:
         r["机组"] = sites.label_of(r.pop("site", ""))
         r.pop("id", None)
+    # 指标均值的字段名翻成中文再给模型。留着英文 key 它会直译成
+    # 「墙热点面积百分比」写进回答里，用户看着莫名其妙。
+    avg = (data["汇总"] or {}).get("avg") or {}
+    data["汇总"]["指标均值"] = {
+        (report_tpl.METRIC_BY_KEY.get(k, {}).get("label") or k): v
+        for k, v in avg.items() if v is not None
+    }
+    data["汇总"].pop("avg", None)
+
     data["_site_id"] = site_id
-    data["_site_label"] = site["label"] if site else "全部机组"
+    data["_site_label"] = scope["label"]
     return data
 
 
@@ -426,9 +437,9 @@ def page_capture():
 
 @app.get("/history", response_class=HTMLResponse)
 def page_history():
-    return _pages.get_template("history.html.j2").render(sites=sites.SITES)
+    return _pages.get_template("history.html.j2").render(sites=sites.SITES, units=sites.UNITS)
 
 
 @app.get("/chat", response_class=HTMLResponse)
 def page_chat():
-    return _pages.get_template("chat.html.j2").render(sites=sites.SITES)
+    return _pages.get_template("chat.html.j2").render(sites=sites.SITES, units=sites.UNITS)
