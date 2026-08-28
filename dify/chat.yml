@@ -1,0 +1,175 @@
+app:
+  description: 依据锅炉分析台账回答历史运行状况的提问。
+  icon: 💬
+  icon_background: '#EEF3F7'
+  mode: advanced-chat
+  name: 锅炉历史问答
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: 可以问我某台机组最近的结焦风险、哪台机组高风险最多、最近一次异常是什么时候。
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions:
+    - 哪台机组高风险最多？
+    - 3号机组最近结焦风险怎么样？
+    - 最近一次高风险是什么时候，什么原因？
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+  graph:
+    edges:
+    - data: {isInIteration: false, isInLoop: false, sourceType: start, targetType: http-request}
+      id: e-start-fetch
+      source: start_node
+      sourceHandle: source
+      target: fetch_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: http-request, targetType: llm}
+      id: e-fetch-llm
+      source: fetch_node
+      sourceHandle: source
+      target: llm_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: llm, targetType: answer}
+      id: e-llm-answer
+      source: llm_node
+      sourceHandle: source
+      target: answer_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: ''
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - variable: days
+          label: 时间范围（天）
+          type: number
+          required: false
+          default: 30
+          options: []
+      height: 90
+      id: start_node
+      position: {x: 40, y: 240}
+      positionAbsolute: {x: 40, y: 240}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    # 机组识别在后端做（sites.resolve 能认「3号机组B层」这类说法），
+    # 不额外加参数提取节点——多一个 LLM 节点只是多一处失败点。
+    - data:
+        desc: 按提问取对应机组的台账数据
+        selected: false
+        title: 取台账
+        type: http-request
+        method: post
+        url: http://flame-cv:8000/api/ledger_bundle
+        authorization: {type: no-auth, config: null}
+        headers: 'Content-Type: application/json'
+        params: ''
+        body:
+          type: json
+          data:
+          - key: ''
+            type: text
+            value: '{"question": "{{#sys.query#}}", "days": {{#start_node.days#}}}'
+            file: []
+        timeout: {connect: 10, read: 30, write: 30}
+        retry_config:
+          enabled: true
+          max_retries: 2
+          retry_interval: 1000
+          exponential_backoff: {enabled: false, multiplier: 2, max_interval: 10000}
+      height: 132
+      id: fetch_node
+      position: {x: 350, y: 240}
+      positionAbsolute: {x: 350, y: 240}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    - data:
+        desc: 只依据台账作答，数据里没有的就说没有
+        selected: false
+        title: 依据台账作答
+        type: llm
+        model:
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+          name: deepseek-v4-flash-vision-exp
+          mode: chat
+          completion_params: {temperature: 0.3}
+        context: {enabled: false, variable_selector: []}
+        vision: {enabled: false}
+        prompt_template:
+        - role: system
+          id: qa-sys
+          text: |
+            你是电站锅炉运行分析助手，负责回答关于历史巡检记录的提问。
+
+            只依据给你的台账数据作答。数据里没有的，直说「台账里没有这项记录」，
+            不要推测，也不要编造机组、时间或数值。
+
+            回答要求：
+            - 先给结论，再给依据，引用具体数字和日期
+            - 涉及趋势时说明方向和幅度，不要只说「有变化」
+            - 提到风险等级用「高 / 中 / 低」，跟台账口径一致
+            - 机组一律用中文名称，不要出现 u1-a 这类内部编号
+            - 简明，不用寒暄，不要重复用户的问题
+        - role: user
+          id: qa-user
+          text: |
+            台账数据：
+            {{#fetch_node.body#}}
+
+            问题：{{#sys.query#}}
+      height: 98
+      id: llm_node
+      position: {x: 660, y: 240}
+      positionAbsolute: {x: 660, y: 240}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    - data:
+        answer: '{{#llm_node.text#}}'
+        desc: ''
+        selected: false
+        title: 回复
+        type: answer
+        variables: []
+      height: 106
+      id: answer_node
+      position: {x: 970, y: 240}
+      positionAbsolute: {x: 970, y: 240}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244

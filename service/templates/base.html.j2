@@ -34,6 +34,10 @@
          background:var(--accent);color:#fff}
   button:disabled{opacity:.5;cursor:default}
   button.ghost{background:#fff;color:var(--accent);border:1px solid var(--line)}
+  /* 表格行内的次要操作，别抢主按钮的注意力 */
+  table button{font:13px var(--b);padding:5px 10px;background:#fff;
+               color:var(--muted);border:1px solid var(--line)}
+  table button:hover{color:#922b21;border-color:#f3c4bf;background:#fdedec}
   .row{display:flex;gap:10px;flex-wrap:wrap}
   .row>*{flex:1;min-width:120px}
 

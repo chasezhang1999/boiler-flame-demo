@@ -50,8 +50,8 @@
   <h2 style="font-size:16px;margin-bottom:10px">分析记录</h2>
   <div style="overflow-x:auto"><table id="tbl">
     <thead><tr><th>时间</th><th>机组 / 位置</th><th>等级</th><th class="num">评分</th>
-      <th>结论</th><th>报告</th></tr></thead>
-    <tbody><tr><td colspan="6" class="muted">加载中…</td></tr></tbody>
+      <th>结论</th><th>报告</th><th></th></tr></thead>
+    <tbody><tr><td colspan="7" class="muted">加载中…</td></tr></tbody>
   </table></div>
 </div>
 {% endblock %}
@@ -89,18 +89,42 @@ async function load(){
   const h = await (await fetch('/api/history?' + qs + '&limit=200')).json();
   const tb = $('#tbl tbody');
   if(!h.rows.length){
-    tb.innerHTML = '<tr><td colspan="6" class="muted">没有记录。先去「拍照分析」跑几次。</td></tr>';
+    tb.innerHTML = '<tr><td colspan="7" class="muted">没有记录。先去「拍照分析」跑几次。</td></tr>';
     return;
   }
   tb.innerHTML = h.rows.map(r =>
-    '<tr>' +
+    '<tr data-id="' + r.id + '">' +
     '<td style="white-space:nowrap">' + esc(r.ts) + '</td>' +
     '<td>' + esc(r.site_label) + '</td>' +
     '<td><span class="lv ' + esc(r.risk_level) + '">' + esc(r.risk_level) + '</span></td>' +
     '<td class="num">' + (r.score==null?'—':r.score) + '</td>' +
     '<td>' + esc(r.headline||'') + '</td>' +
     '<td>' + (r.report_url ? '<a href="'+esc(r.report_url)+'" target="_blank">打开</a>' : '—') + '</td>' +
+    '<td><button class="del" title="删除这条记录">删除</button></td>' +
     '</tr>').join('');
+
+  tb.querySelectorAll('.del').forEach(b => b.onclick = () => del(b));
+}
+
+async function del(btn){
+  const tr = btn.closest('tr');
+  const id = tr.dataset.id;
+  const when = tr.children[0].textContent, where = tr.children[1].textContent;
+  // 删除连带清掉报告页和两张图，不可撤销，所以要确认
+  if(!confirm('删除这条记录？\n\n' + where + '　' + when +
+              '\n\n报告页和分析图会一起删除，不可恢复。')) return;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try{
+    const r = await fetch('/api/history/' + id, {method:'DELETE'});
+    if(!r.ok){ const j = await r.json().catch(()=>({})); throw new Error(j.detail||('HTTP '+r.status)); }
+    tr.remove();
+    load();                       // 统计和趋势图跟着刷新
+  }catch(e){
+    alert('删除失败：' + e.message);
+    btn.disabled = false;
+    btn.textContent = '删除';
+  }
 }
 
 $('#btn-go').onclick = load;

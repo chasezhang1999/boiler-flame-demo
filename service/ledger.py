@@ -179,3 +179,24 @@ def by_site(days: int = 30) -> list:
             " FROM runs%s GROUP BY site ORDER BY high DESC, n DESC" % w, args
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def get(run_id: int):
+    with _conn() as c:
+        r = c.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+    return dict(r) if r else None
+
+
+def delete(run_id: int) -> dict:
+    """
+    删一条记录，并把它生成的报告页和两张图一并删掉。
+
+    这些文件只能从台账记录点进去，记录没了就是孤儿，留着白占地方。
+    返回被删记录，调用方据此清理文件；找不到返回 None。
+    """
+    row = get(run_id)
+    if not row:
+        return None
+    with _lock, _conn() as c:
+        c.execute("DELETE FROM runs WHERE id = ?", (run_id,))
+    return row

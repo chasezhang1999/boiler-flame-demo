@@ -132,19 +132,26 @@ curl http://127.0.0.1:18800/health
 
 ### 3.2 导入工作流
 
-工作室 → 创建应用 → 导入 DSL → 选 `dify/workflow.yml`。七个节点：
+工作室 → 创建应用 → 导入 DSL → 选 `dify/workflow.yml`：
 
 ```
-开始(photo 图片 + site 下拉) → CV图像分析(HTTP) → 解析结果(代码)
-  → 结焦风险判级(LLM+视觉) → 渲染报告(HTTP) → 汇总输出(代码) → 结束
+开始(photo 图片 + site 下拉)
+  → 图像校验(LLM+视觉)  → 是火焰照片？
+        ├ 是 → CV图像分析(HTTP) → 解析结果(代码) → 结焦风险判级(LLM+视觉)
+        │      → 渲染报告(HTTP) → 汇总输出(代码) → 结束
+        └ 否 → 拒绝并说明(代码) → 结束（未分析）
 ```
+
+**图像校验节点**先判断上传的是不是炉膛内部火焰照片。不加这一步的话，传张风景照
+也会走完全流程，最后出一份一本正经的结焦报告——演示时被人随手传张无关图就穿帮。
+它只输出 `FLAME` / `OTHER` 一个词，分支节点据此走向。否分支不落台账。
 
 导入后要改三处：
 
 1. **两个 HTTP 节点的地址**改成你的后端：`http://<后端容器名>:8000/analyze` 和 `/report`
-2. **LLM 节点的视觉开关**指向 `开始节点 / photo`——不是默认的 `sys.files`，
+2. **两个 LLM 节点的视觉开关**都指向 `开始节点 / photo`——不是默认的 `sys.files`，
    工作流应用的文件走自定义变量，指错了模型收不到图
-3. **提示词**用 `dify/prompts/risk_assessment.md` 里那段替换 SYSTEM
+3. 确认**提示词**是 `dify/prompts/risk_assessment.md` 里那版
 
 然后发布应用。
 
@@ -156,7 +163,24 @@ curl http://127.0.0.1:18800/health
 docker compose up -d
 ```
 
-### 3.4 机组清单
+### 3.4 导入问答 chatflow
+
+再建一个应用，导入 `dify/chat.yml`（四个节点）：
+
+```
+开始 → 取台账(HTTP) → 依据台账作答(LLM) → 回复
+```
+
+机组识别放在后端做（`sites.resolve()` 能认出「3号机组B层」这类说法），
+所以不需要参数提取节点——少一个 LLM 节点就少一处失败点。
+
+导入后改 HTTP 节点地址为 `http://<后端容器名>:8000/api/ledger_bundle`，
+发布，然后在「访问 API」页生成密钥填进后端 `.env` 的 `DIFY_CHAT_KEY`。
+
+> 不填 `DIFY_CHAT_KEY` 也能用——问答会退回直连模型，答案一样，
+> 只是工作流画布上看不到这条链路。演示要讲编排就填上。
+
+### 3.5 机组清单
 
 改 `service/sites.py`，然后同步进 DSL 的下拉选项（Dify 读不了接口，选项只能写死）：
 
@@ -220,9 +244,12 @@ service/          后端
   templates/      报告模板 + 三个页面
   assets/fonts/   自托管字体
 dify/
-  workflow.yml    工作流 DSL
+  workflow.yml    分析工作流 DSL（含火焰照片校验分支）
+  chat.yml        历史问答 chatflow DSL
   prompts/        提示词，独立成文件便于评审
 tools/
+  import_photos.py 把真实照片批量补录进台账（真 CV + 真判级）
+  build_workflow.py 从线上 graph 生成带校验分支的 DSL
   seed_ledger.py  灌模拟历史
   sync_sites.py   机组清单同步进 DSL
   fetch_fonts.py  抓取自托管字体
@@ -237,7 +264,6 @@ data/             (gitignore) 台账，挂载卷，重建镜像不丢
 | 缺什么 | 影响 |
 |---|---|
 | 参数规则工具 | 蒸汽温度 / 压力的规则检查没有，只有图像这条线 |
-| 「图像是否可用」分支 | 过暗 / 过曝 / 无效图不会被拦 |
 | 「证据是否充分」分支 | 不会输出「信息不足」，缺输入也照样给结论 |
 | 对话式追问 | 开始节点一次性收齐输入，不会追问补齐 |
 

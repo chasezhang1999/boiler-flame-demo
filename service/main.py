@@ -34,6 +34,8 @@ BASE_URL = os.environ.get("BASE_URL", "").rstrip("/")
 # Dify 工作流（分析链路）。key 只存在服务端。
 DIFY_BASE = os.environ.get("DIFY_BASE", "").rstrip("/")
 DIFY_KEY = os.environ.get("DIFY_API_KEY", "")
+# 问答 chatflow 是独立的应用，另有一把 key；没配就退回直连模型
+DIFY_CHAT_KEY = os.environ.get("DIFY_CHAT_KEY", "")
 
 # 对话问答用的模型，直接调，不经 Dify
 LLM_BASE = os.environ.get("LLM_BASE", "https://api.deepseek.com/v1").rstrip("/")
@@ -125,7 +127,10 @@ async def make_report(
         f.write(report_tpl.render_html(ctx))
 
     try:
-        ledger.record(s["id"] if s else "", ctx, metrics, report_url)
+        # 台账按拍摄时间记，不是按报告渲染时间。补录历史照片时这两者能差很远，
+        # 按渲染时间记的话所有记录都会堆在导入那一刻，趋势图就废了。
+        ts = shot_at if len(shot_at) > 16 else shot_at + ":00"
+        ledger.record(s["id"] if s else "", ctx, metrics, report_url, ts=ts)
     except Exception as e:                       # 台账坏了不能连累出报告
         print("[ledger] 写入失败：%s" % e)
 
@@ -197,6 +202,31 @@ def api_history(site: str = "", days: int = 0, limit: int = Query(50, le=500)):
     return {"rows": rows, "count": len(rows)}
 
 
+@app.delete("/api/history/{run_id}")
+def api_delete(run_id: int):
+    row = ledger.delete(run_id)
+    if not row:
+        raise HTTPException(404, "记录不存在")
+
+    # 顺手清掉这条记录生成的报告页和两张图。它们只能从台账点进去，
+    # 记录没了就是孤儿文件。只删 static 目录下的，且按文件名取，
+    # 不信任库里存的完整 URL —— 那是外部可写字段，不能拿来拼路径。
+    removed = 0
+    for key in ("report_url", "contour_url", "heatmap_url"):
+        url = row.get(key) or ""
+        name = os.path.basename(url.split("?")[0])
+        if not name or "/" in name or "\\" in name or name.startswith("."):
+            continue
+        path = os.path.join(STATIC_DIR, name)
+        if os.path.isfile(path):
+            try:
+                os.remove(path)
+                removed += 1
+            except OSError:
+                pass
+    return {"deleted": run_id, "files_removed": removed}
+
+
 @app.get("/api/summary")
 def api_summary(site: str = "", days: int = 30):
     d = ledger.summary(site, days)
@@ -257,37 +287,14 @@ def api_csv(site: str = "", days: int = 0):
                              'attachment; filename="ledger.csv"'})
 
 
-SYS_PROMPT = """你是电站锅炉运行分析助手，负责回答关于历史巡检记录的提问。
-
-只依据给你的台账数据作答。数据里没有的，直说「台账里没有这项记录」，
-不要推测，也不要编造机组、时间或数值。
-
-回答要求：
-- 先给结论，再给依据，引用具体数字和日期
-- 涉及趋势时说明方向和幅度，不要只说「有变化」
-- 提到风险等级用「高 / 中 / 低」，跟台账口径一致
-- 简明，不用寒暄，不要重复用户的问题
-"""
-
-
-@app.post("/api/chat")
-async def api_chat(payload: dict):
+def _ledger_bundle(question: str, site_hint: str = "", days: int = 30) -> dict:
     """
-    历史问答。先按提问里的机组把台账取出来，连同问题一起交给模型。
+    问答要用的台账数据。
 
-    没有做 function calling —— 取数逻辑就三种（某机组汇总、横向对比、
-    最近明细），直接全给模型比让它自己决定调什么工具更稳，也更省一轮往返。
+    机组识别放在这里而不是 Dify 的参数提取节点：sites.resolve() 已经能从
+    「3号机组B层」这类说法里认出位置，多一个 LLM 节点只会多一处失败点。
     """
-    if not LLM_KEY:
-        raise HTTPException(503, "未配置 LLM_API_KEY")
-
-    question = str(payload.get("question", "")).strip()
-    if not question:
-        raise HTTPException(400, "问题不能为空")
-    days = int(payload.get("days") or 30)
-
-    # 提问里点名了哪个机组就只查它，没点名就给全局对比
-    site = sites.resolve(payload.get("site") or "") or sites.resolve(question)
+    site = sites.resolve(site_hint) or sites.resolve(question)
     site_id = site["id"] if site else ""
 
     data = {
@@ -304,24 +311,85 @@ async def api_chat(payload: dict):
     for r in data["最近记录"]:
         r["机组"] = sites.label_of(r.pop("site", ""))
         r.pop("id", None)
+    data["_site_id"] = site_id
+    data["_site_label"] = site["label"] if site else "全部机组"
+    return data
 
-    body = {
-        "model": LLM_MODEL,
-        "temperature": 0.3,
-        "messages": [
-            {"role": "system", "content": SYS_PROMPT},
-            {"role": "user", "content": "台账数据：\n%s\n\n问题：%s" % (
-                json.dumps(data, ensure_ascii=False, indent=2, default=str),
-                question)},
-        ],
-    }
-    async with httpx.AsyncClient(timeout=90) as c:
-        r = await c.post("%s/chat/completions" % LLM_BASE, json=body,
-                         headers={"Authorization": "Bearer %s" % LLM_KEY})
-    if r.status_code >= 300:
-        raise HTTPException(502, "模型调用失败：%s" % r.text[:300])
 
-    answer = r.json()["choices"][0]["message"]["content"]
+@app.post("/api/ledger_bundle")
+def api_ledger_bundle(payload: dict):
+    """给 Dify chatflow 的 HTTP 节点取数用。"""
+    return _ledger_bundle(str(payload.get("question", "")),
+                          str(payload.get("site", "")),
+                          int(payload.get("days") or 30))
+
+
+SYS_PROMPT = """你是电站锅炉运行分析助手，负责回答关于历史巡检记录的提问。
+
+只依据给你的台账数据作答。数据里没有的，直说「台账里没有这项记录」，
+不要推测，也不要编造机组、时间或数值。
+
+回答要求：
+- 先给结论，再给依据，引用具体数字和日期
+- 涉及趋势时说明方向和幅度，不要只说「有变化」
+- 提到风险等级用「高 / 中 / 低」，跟台账口径一致
+- 简明，不用寒暄，不要重复用户的问题
+"""
+
+
+@app.post("/api/chat")
+async def api_chat(payload: dict):
+    """
+    历史问答。
+
+    配了 DIFY_CHAT_KEY 就走 Dify 的 chatflow（画布上能看到编排，演示时讲得清）；
+    没配就直连模型 —— 兜底是为了 chatflow 还没导入时问答页不至于挂掉。
+
+    两条路取的是同一份台账数据：chatflow 里的 HTTP 节点回调本服务的
+    /api/ledger_bundle，跟直连分支调的是同一个函数。
+    """
+    question = str(payload.get("question", "")).strip()
+    if not question:
+        raise HTTPException(400, "问题不能为空")
+    days = int(payload.get("days") or 30)
+    site_hint = str(payload.get("site") or "")
+
+    # 附图和站点标签两条路都要用，先算出来
+    data = _ledger_bundle(question, site_hint, days)
+    site_id, site_label = data["_site_id"], data["_site_label"]
+
+    if DIFY_CHAT_KEY and DIFY_BASE:
+        async with httpx.AsyncClient(timeout=120) as c:
+            r = await c.post(
+                "%s/chat-messages" % DIFY_BASE,
+                headers={"Authorization": "Bearer %s" % DIFY_CHAT_KEY},
+                json={"inputs": {"days": days}, "query": question,
+                      "response_mode": "blocking", "user": "web"},
+            )
+        if r.status_code >= 300:
+            raise HTTPException(502, "Dify 问答失败：%s" % r.text[:300])
+        answer = r.json().get("answer", "")
+        via = "dify"
+    else:
+        if not LLM_KEY:
+            raise HTTPException(503, "未配置 DIFY_CHAT_KEY 或 LLM_API_KEY")
+        payload_ = {k: v for k, v in data.items() if not k.startswith("_")}
+        async with httpx.AsyncClient(timeout=90) as c:
+            r = await c.post(
+                "%s/chat/completions" % LLM_BASE,
+                headers={"Authorization": "Bearer %s" % LLM_KEY},
+                json={"model": LLM_MODEL, "temperature": 0.3, "messages": [
+                    {"role": "system", "content": SYS_PROMPT},
+                    {"role": "user", "content": "台账数据：\n%s\n\n问题：%s" % (
+                        json.dumps(payload_, ensure_ascii=False, indent=2,
+                                   default=str), question)},
+                ]},
+            )
+        if r.status_code >= 300:
+            raise HTTPException(502, "模型调用失败：%s" % r.text[:300])
+        answer = r.json()["choices"][0]["message"]["content"]
+        via = "direct"
+
     answer = report_tpl.strip_think(answer)
 
     # 问到某个机组时附一张趋势图，省得再让用户自己点
@@ -329,9 +397,8 @@ async def api_chat(payload: dict):
     if site_id and ledger.series(site_id, "temp_index_p95", days):
         chart = "/api/chart?site=%s&metric=temp_index_p95&days=%d" % (site_id, days)
 
-    return {"answer": answer, "site": site_id,
-            "site_label": site["label"] if site else "全部机组",
-            "chart_url": chart, "days": days}
+    return {"answer": answer, "site": site_id, "site_label": site_label,
+            "chart_url": chart, "days": days, "via": via}
 
 
 @app.get("/health")
