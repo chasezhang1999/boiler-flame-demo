@@ -70,9 +70,7 @@ $('#btn-go').onclick = async () => {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('site', site);
-    const r = await fetch('/api/analyze', {method:'POST', body:fd});
-    const j = await r.json();
-    if(!r.ok) throw new Error(j.detail || ('HTTP ' + r.status));
+    const j = await api('/api/analyze', {method:'POST', body:fd});
     $('#result').innerHTML = md2html(j.summary || '（工作流没有返回内容）');
     $('#result').hidden = false;
     $('#result').scrollIntoView({behavior:'smooth', block:'start'});

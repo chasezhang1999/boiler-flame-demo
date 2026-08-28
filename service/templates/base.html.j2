@@ -132,6 +132,22 @@ function md2html(s){
   }
   return out.join('');
 }
+// 统一的接口调用：后端 5xx 时反代返回的是 HTML 错误页，直接 r.json()
+// 会抛 "Unexpected token '<'"，把真实原因盖掉。这里先取文本再试解析。
+async function api(url, opts){
+  const r = await fetch(url, opts);
+  const text = await r.text();
+  let data = null;
+  try { data = JSON.parse(text); } catch (e) { /* 不是 JSON，往下走 */ }
+  if (!r.ok) {
+    if (data && data.detail) throw new Error(data.detail);
+    if (r.status === 502 || r.status === 504)
+      throw new Error('后端无响应或超时（HTTP ' + r.status + '）。若刚改过配置，等容器重启完再试。');
+    throw new Error('HTTP ' + r.status + '：' + text.replace(/<[^>]*>/g, ' ').trim().slice(0, 120));
+  }
+  if (data === null) throw new Error('后端返回的不是 JSON：' + text.slice(0, 120));
+  return data;
+}
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 </script>
 {% block script %}{% endblock %}

@@ -149,7 +149,8 @@ curl http://127.0.0.1:18800/health
 
 导入后要改三处：
 
-1. **两个 HTTP 节点的地址**改成你的后端：`http://<后端容器名>:8000/analyze` 和 `/report`
+1. **两个 HTTP 节点的地址**改成你的后端**公网地址**：`https://<你的域名>/analyze` 和 `/report`。
+   不能填容器名或内网 IP——Dify 的 HTTP 节点有 SSRF 防护，访问私有地址会被拦
 2. **两个 LLM 节点的视觉开关**都指向 `开始节点 / photo`——不是默认的 `sys.files`，
    工作流应用的文件走自定义变量，指错了模型收不到图
 3. 确认**提示词**是 `dify/prompts/risk_assessment.md` 里那版
@@ -175,7 +176,7 @@ docker compose up -d
 机组识别放在后端做（`sites.resolve()` 能认出「3号机组B层」这类说法），
 所以不需要参数提取节点——少一个 LLM 节点就少一处失败点。
 
-导入后改 HTTP 节点地址为 `http://<后端容器名>:8000/api/ledger_bundle`，
+导入后改 HTTP 节点地址为 `https://<你的域名>/api/ledger_bundle`（同样不能填内网地址），
 发布，然后在「访问 API」页生成密钥填进后端 `.env` 的 `DIFY_CHAT_KEY`。
 
 > 不填 `DIFY_CHAT_KEY` 也能用——问答会退回直连模型，答案一样，
@@ -229,6 +230,8 @@ docker exec flame-cv python tools/seed_ledger.py --days 45 --per-day 3
 | 代码节点报 `unexpected keyword argument` | Dify 把**所有已声明变量**当关键字参数传入，删代码要连变量一起删 |
 | HTTP 节点请求体被撑坏 | 模型输出带换行和引号。`/report` 用 form-data 而非 JSON |
 | Dify 起不来，端口冲突 | 80/443 被占，见第 1 步改端口 |
+| HTTP 节点报 `blocked by SSRF protection` | Dify 默认禁止访问私有 IP，节点地址要填公网域名，不能填容器名 |
+| 前端报 `Unexpected token '<'` | 后端出错时反代返回的是 HTML 错误页。真实原因看后端日志或直连 `127.0.0.1:18800` |
 
 ---
 

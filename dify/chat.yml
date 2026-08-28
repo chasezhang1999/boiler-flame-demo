@@ -80,13 +80,17 @@ workflow:
 
     # 机组识别在后端做（sites.resolve 能认「3号机组B层」这类说法），
     # 不额外加参数提取节点——多一个 LLM 节点只是多一处失败点。
+    #
+    # 用公网 HTTPS 而不是容器名：Dify 的 HTTP 节点默认禁止访问私有 IP
+    # （SSRF 防护），填 http://flame-cv:8000 会被拦，报
+    # "blocked by SSRF protection"。改成你自己的域名。
     - data:
         desc: 按提问取对应机组的台账数据
         selected: false
         title: 取台账
         type: http-request
         method: post
-        url: http://flame-cv:8000/api/ledger_bundle
+        url: https://flame.518521.xyz/api/ledger_bundle
         authorization: {type: no-auth, config: null}
         headers: 'Content-Type: application/json'
         params: ''

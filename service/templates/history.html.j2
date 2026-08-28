@@ -68,7 +68,7 @@ async function load(){
   $('#chart').src = '/api/chart?' + new URLSearchParams({site, days, metric}) +
                     '&_=' + Date.now();
 
-  const s = await (await fetch('/api/summary?' + qs)).json();
+  const s = await api('/api/summary?' + qs);
   $('#stat').hidden = false;
   if(!s.total){
     $('#stat').innerHTML = '<div class="muted">该条件下台账里还没有记录。</div>';
@@ -86,7 +86,7 @@ async function load(){
       '</div>';
   }
 
-  const h = await (await fetch('/api/history?' + qs + '&limit=200')).json();
+  const h = await api('/api/history?' + qs + '&limit=200');
   const tb = $('#tbl tbody');
   if(!h.rows.length){
     tb.innerHTML = '<tr><td colspan="7" class="muted">没有记录。先去「拍照分析」跑几次。</td></tr>';
@@ -116,8 +116,7 @@ async function del(btn){
   btn.disabled = true;
   btn.textContent = '…';
   try{
-    const r = await fetch('/api/history/' + id, {method:'DELETE'});
-    if(!r.ok){ const j = await r.json().catch(()=>({})); throw new Error(j.detail||('HTTP '+r.status)); }
+    await api('/api/history/' + id, {method:'DELETE'});
     tr.remove();
     load();                       // 统计和趋势图跟着刷新
   }catch(e){
