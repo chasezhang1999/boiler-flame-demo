@@ -135,8 +135,14 @@ def main():
     # 判级提示词以 prompts 文件为准，不沿用线上那份 —— 线上是历史版本，
     # 界面上改过就再没同步回来过。参考区间从 report.py 注入，
     # 重标之后不会和模型看到的脱节。
+    #
+    # user 消息必须一起给：只换 system 会把携带指标的那条 user 覆盖掉，
+    # 模型就只剩一张图，判级里会出现「量化指标缺失」。
     llm["data"]["prompt_template"] = [
-        {"role": "system", "text": load_prompt("risk_assessment.md"), "id": "risk-sys"}
+        {"role": "system", "text": load_prompt("risk_assessment.md"), "id": "risk-sys"},
+        {"role": "user", "id": "risk-user", "text":
+            "这是炉膛火焰照片。图像分析程序算出的量化指标如下：\n\n"
+            "{{#parse_node.metrics_text#}}"},
     ]
 
     # 1) 图像校验节点：跟判级节点用同一个模型，视觉同样指向 start_node/photo

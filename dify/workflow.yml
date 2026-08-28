@@ -181,6 +181,12 @@ workflow:
             : [\"第一步的图像观察，2-4 条；确实看不出就写「照片不足以判断」\"],\n  \"metric_findings\": [\"来自指标的发现，2-4 条，要引用具体数值\"\
             ],\n  \"reasons\": [\"支撑该等级的理由，2-3 条\"],\n  \"suggestions\": [\"运行调整建议，2-3 条\"]\n}"
           id: risk-sys
+        - role: user
+          id: risk-user
+          text: '这是炉膛火焰照片。图像分析程序算出的量化指标如下：
+
+
+            {{#parse_node.metrics_text#}}'
         prompt_config:
           jinja2_variables: []
         memory: null
