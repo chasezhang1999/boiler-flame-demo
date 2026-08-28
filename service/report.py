@@ -54,8 +54,10 @@ COLOR_HIGH = "#c2410c"
 COLOR_OK = "#5d5d60"
 COLOR_INK = "#1d1f20"
 
-# 有符号偏移量的显示满程（%）。用 ±100 的话 ±10 的参考带细到看不见。
-DISPLAY_SPAN = 50
+# 双向轴上参考带该占轨道的比例。满程由区间反推，不能写死：
+# 区间放宽到 ±55 而满程还钉在 ±50 时，参考带会铺满整条轨道、
+# 任何超过 50 的读数都被压到边缘，那张图就没有信息量了。
+BAND_TRACK_RATIO = 0.65
 
 # key, 中文名, 单位, 量程（None = 不画条）, 参考区间（None = 不判越界）,
 # 低于区间时的说法, 高于区间时的说法, 是否有符号（正负号表示方向）
@@ -166,13 +168,37 @@ def _pct(value, span):
     return round(max(0.0, min(100.0, abs(v) / span * 100)), 1)
 
 
-def _signed_pos(value, unit):
-    """双向轴上的位置（0~100，50 = 零点）。"""
-    v = _num(value)
-    if v is None:
+def _axis(band, signed):
+    """
+    图示刻度范围，由参考区间反推：让参考带占轨道 BAND_TRACK_RATIO，
+    两侧留出余量给越界读数。
+
+    不按「占量程的比例」画，是因为区间和量程的尺度经常差得很远：
+    贴壁亮斑面积上限 0.9 而量程 100，参考带只有轨道的 0.9%，细成一根线；
+    相对亮温均值区间 0.7~0.8，轴从 0 起的话带子同样窄。
+    把刻度锚在区间上，每根条都能看清带子在哪、读数偏到哪边。
+    """
+    if band is None:
         return None
-    span = DISPLAY_SPAN if unit == "%" else 1.0
-    return round(50 + max(-50.0, min(50.0, v / span * 50)), 1)
+    lo, hi = (-band[1], band[1]) if signed else (band[0], band[1])
+    width = hi - lo
+    if width <= 0:
+        width = abs(hi) or 1.0
+    margin = width * (1 - BAND_TRACK_RATIO) / (2 * BAND_TRACK_RATIO)
+    a_lo, a_hi = lo - margin, hi + margin
+    if not signed:
+        a_lo = max(0.0, a_lo)          # 单边指标取不到负值，轴从 0 起
+    return a_lo, a_hi
+
+
+def _pos(value, axis):
+    """读数在刻度上的位置（0~100）。返回 (位置, 是否越出图示范围)。"""
+    v = _num(value)
+    if v is None or axis is None:
+        return None, False
+    lo, hi = axis
+    raw = (v - lo) / (hi - lo) * 100 if hi > lo else 50.0
+    return round(max(0.0, min(100.0, raw)), 1), (raw < -0.05 or raw > 100.05)
 
 
 def _judge(value, band, signed):
@@ -243,16 +269,14 @@ def build_context(assessment_text: str, metrics: dict, contour_url: str,
         out = _judge(value, band, signed)
         pct = _pct(value, span)
 
-        if signed and band is not None:
-            band_lo = _signed_pos(-band[1], unit)
-            band_hi = _signed_pos(band[1], unit)
-            mark = _signed_pos(value, unit)
-        elif band is not None and span is not None:
-            band_lo = round(band[0] / span * 100, 1)
-            band_hi = round(band[1] / span * 100, 1)
-            mark = pct
+        axis = _axis(band, signed)
+        if axis is not None:
+            band_lo, _ = _pos(-band[1] if signed else band[0], axis)
+            band_hi, _ = _pos(band[1], axis)
+            mark, clamped = _pos(value, axis)
         else:
             band_lo = band_hi = mark = None
+            clamped = False
 
         state = low_word or "偏低" if out == -1 else (
             high_word or "偏高" if out == 1 else "区间内")
@@ -264,6 +288,7 @@ def build_context(assessment_text: str, metrics: dict, contour_url: str,
             "band": band, "signed": signed, "zero_tick": bool(signed),
             "band_left": band_lo, "band_width": None if band_lo is None else round(band_hi - band_lo, 1),
             "mark_left": mark, "out": out, "abnormal": out != 0,
+            "clamped": clamped, "axis": axis,
             "state": state, "color": color,
             "value_color": color if out != 0 else COLOR_INK,
             "mark_color": color if out != 0 else COLOR_INK,

@@ -97,6 +97,12 @@
   .track .band{position:absolute;top:0;bottom:0;background:#d4d4d7}
   .track .zero{position:absolute;top:-2px;bottom:-2px;left:50%;width:1px;background:var(--faint)}
   .track .mark{position:absolute;top:-3px;bottom:-3px;transform:translateX(-50%)}
+  /* 爆表：用贴边的小三角表示「还在更外面」，不要画成一根顶格的竖线 */
+  .track .mark.over{width:0;height:0;top:-2px;bottom:auto;
+                    border-top:7px solid transparent;border-bottom:7px solid transparent;
+                    border-left:7px solid;border-right:7px solid;
+                    border-left-color:transparent!important}
+  .track .mark.over[style*="left:0"]{border-left-color:transparent!important}
   .range{font-size:10.5px;color:var(--faint);margin-top:4px;font-variant-numeric:tabular-nums}
   .state{display:inline-block;font-family:var(--h);font-size:13px;letter-spacing:.05em;
          padding:1px 8px;border:1px solid transparent}
@@ -245,9 +251,15 @@
         <div class="track">
           <div class="band" style="left:{{ m.band_left }}%;width:{{ m.band_width }}%"></div>
           {% if m.zero_tick %}<div class="zero"></div>{% endif %}
-          <div class="mark" style="left:{{ m.mark_left }}%;width:{{ m.mark_width }}px;background:{{ m.mark_color }}"></div>
+          {# 越出图示刻度时画成贴边三角，跟「刚好顶格」区分开 #}
+          <div class="mark{% if m.clamped %} over{% endif %}"
+               style="left:{{ m.mark_left }}%;{% if not m.clamped %}width:{{ m.mark_width }}px;{% endif %}
+                      background:{% if m.clamped %}transparent{% else %}{{ m.mark_color }}{% endif %};
+                      {% if m.clamped %}border-left-color:{{ m.mark_color }};
+                      border-right-color:{{ m.mark_color }};{% endif %}"></div>
         </div>
-        <div class="range">参考 {{ m.range_text }}{% if m.signed %} · 轴中心＝0{% endif %}</div>
+        <div class="range">参考 {{ m.range_text }}{% if m.signed %} · 轴中心＝0{% endif %}{%
+          if m.clamped %} · <b style="color:{{ m.mark_color }}">读数超出图示范围</b>{% endif %}</div>
         {% else %}
         <span class="range">无量程 · 计数项</span>
         {% endif %}
