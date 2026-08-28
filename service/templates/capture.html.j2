@@ -1,6 +1,6 @@
 {% extends "base.html.j2" %}
 {% set page = "capture" %}
-{% block title %}拍照分析 · 锅炉运行分析助手{% endblock %}
+{% block title %}拍照分析 · 炉智检{% endblock %}
 
 {% block head %}
 <style>
@@ -61,11 +61,12 @@
     <div class="bp" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
       <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
       <div class="eyebrow">机组 / 位置 — 台账按它归档</div>
-      <div class="grid4" id="units"></div>
-      <div class="grid4" id="spots"></div>
-      <div style="font-size:12px;color:var(--n600);border-top:1px solid var(--line);padding-top:10px;
-                  display:flex;justify-content:space-between;gap:10px">
-        <span>当前机位</span><b id="site-label">未选择</b>
+      <div>
+        <label for="site">机组 / 位置</label>
+        <select id="site">
+          <option value="">请选择…</option>
+          {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+        </select>
       </div>
     </div>
 
@@ -120,7 +121,6 @@
           <div class="verdict" id="verdict"></div>
           <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
             <a id="btn-report" class="btn primary lg" target="_blank" href="#">查看完整报告</a>
-            <button id="btn-again" class="btn lg">再拍一张</button>
           </div>
           <div class="muted" style="text-align:center;font-size:11px" id="archived"></div>
         </div>
@@ -140,39 +140,26 @@
 {% block script %}
 <script>
 const SITES = {{ sites|tojson }};
-const UNITS = [...new Set(SITES.map(s => s.unit))];
-const SPOTS = [...new Set(SITES.map(s => s.spot))];
 const STAGES = ['照片校验','CV 分割与指标','风险判级','生成报告 · 落台账'];
 
-let unit = '', spot = '', file = null, timer = null, t0 = 0;
+let file = null, timer = null, t0 = 0;
 
-function siteId(){
-  const s = SITES.find(x => x.unit === unit && x.spot === spot);
-  return s ? s.id : '';
-}
+function siteId(){ return $('#site').value; }
 function siteLabel(){
-  const s = SITES.find(x => x.unit === unit && x.spot === spot);
-  return s ? s.label : (unit || spot ? (unit + ' ' + spot).trim() : '未选择机位');
+  const s = SITES.find(x => x.id === siteId());
+  return s ? s.label : '未选择机位';
 }
 function showErr(m){ const e = $('#err'); e.textContent = m || ''; e.hidden = !m; }
 
-function renderPicker(){
-  $('#units').innerHTML = UNITS.map(u =>
-    '<button class="cell' + (u===unit?' on':'') + '" data-u="' + esc(u) + '">' +
-    esc(u.replace('机组','')) + '</button>').join('');
-  $('#spots').innerHTML = SPOTS.map(s =>
-    '<button class="cell' + (s===spot?' on':'') + '" data-s="' + esc(s) + '">' +
-    esc(s.replace('燃烧器','')) + '</button>').join('');
-  $$('#units .cell').forEach(b => b.onclick = () => { unit = b.dataset.u; renderPicker(); loadRecent(); });
-  $$('#spots .cell').forEach(b => b.onclick = () => { spot = b.dataset.s; renderPicker(); loadRecent(); });
-  $('#site-label').textContent = siteLabel();
+function onSite(){
   $('#vp-site').textContent = siteLabel();
+  loadRecent();
 }
 
 async function loadRecent(){
   const id = siteId();
-  if(!id){ return; }
   const box = $('#recent');
+  if(!id){ box.innerHTML = '<div class="muted">选择机位后显示。</div>'; return; }
   box.innerHTML = '<div class="muted">加载中…</div>';
   try{
     const j = await api('/api/history?' + new URLSearchParams({site:id, days:0, limit:3}));
@@ -259,11 +246,10 @@ function reset(){
   showErr(''); setPhase('idle');
 }
 $('#btn-reset').onclick = reset;
-$('#btn-again').onclick = reset;
 
 $('#btn-go').onclick = async () => {
   const id = siteId();
-  if(!id){ showErr('请先选择机组和位置——台账要按它归档。'); return; }
+  if(!id){ showErr('请先选择机组 / 位置——台账要按它归档。'); return; }
   if(!file){ showErr('还没有照片。'); return; }
   showErr('');
   setPhase('busy');
@@ -282,7 +268,8 @@ $('#btn-go').onclick = async () => {
   }
 };
 
-renderPicker();
+$('#site').onchange = onSite;
+onSite();
 setPhase('idle');
 </script>
 {% endblock %}

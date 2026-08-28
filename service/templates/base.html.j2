@@ -2,7 +2,8 @@
 <html lang="zh-CN"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>{% block title %}锅炉运行分析助手{% endblock %}</title>
+<title>{% block title %}炉智检{% endblock %}</title>
+<link rel="icon" href="/assets/logo.png">
 <link rel="stylesheet" href="/assets/fonts/fonts.css">
 <style>
   /* Industry：钢蓝 + 线框。方角、发丝描边、卡片四角十字标记。 */
@@ -17,6 +18,7 @@
     --b:"Barlow",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
   }
   *,*::before,*::after{box-sizing:border-box}
+  [hidden]{display:none!important}   /* 内联 display 会盖掉 hidden 属性，这里钉死 */
   body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--b)}
   h1,h2,h3,h4{font-family:var(--h);font-weight:600;line-height:1.12;letter-spacing:-.015em;margin:0}
   a{color:var(--accent-700);text-underline-offset:3px}
@@ -42,11 +44,8 @@
       border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
   .brand{display:flex;align-items:center;gap:10px;padding:0 20px;
          border-right:1px solid var(--line);white-space:nowrap}
-  .brand .mk{width:22px;height:22px;border:1px solid var(--accent);position:relative;flex:none}
-  .brand .mk::after{content:"";position:absolute;inset:4px;background:var(--accent)}
-  .brand b{font-family:var(--h);font-weight:600;font-size:18px}
-  .brand .demo{font-family:var(--h);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
-               color:var(--n600);border:1px solid var(--line);padding:1px 6px}
+  .brand img{width:24px;height:24px;display:block;flex:none}
+  .brand b{font-family:var(--h);font-weight:600;font-size:19px;letter-spacing:.02em}
   nav .tabs{display:flex}
   nav .tabs a{display:flex;align-items:center;padding:14px 20px;text-decoration:none;white-space:nowrap;
       font-family:var(--h);font-weight:600;font-size:15px;color:var(--n600);
@@ -54,8 +53,8 @@
   nav .tabs a:hover{background:rgba(89,128,166,.08);color:var(--ink)}
   nav .tabs a.on{color:var(--ink);border-bottom-color:var(--accent);background:rgba(89,128,166,.08)}
   nav .status{margin-left:auto;display:flex;align-items:center;gap:16px;padding:0 20px;
-              font-size:12px;color:var(--n700);white-space:nowrap;overflow:hidden}
-  nav .status .dot{width:6px;height:6px;background:var(--lo);display:block}
+              font-family:var(--h);font-size:13px;letter-spacing:.06em;color:var(--n700);
+              white-space:nowrap;overflow:hidden}
 
   .kicker{font-family:var(--h);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-700)}
   .eyebrow{font-family:var(--h);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--n600)}
@@ -125,13 +124,13 @@
 </head><body>
 
 <nav class="noprint">
-  <div class="brand"><span class="mk"></span><b>锅炉运行分析助手</b><span class="demo">demo</span></div>
+  <div class="brand"><img src="/assets/logo.png" alt="炉智检"><b>炉智检</b></div>
   <div class="tabs">
     <a href="/"        class="{% if page=='capture' %}on{% endif %}">拍照分析</a>
     <a href="/history" class="{% if page=='history' %}on{% endif %}">历史台账</a>
     <a href="/chat"    class="{% if page=='chat' %}on{% endif %}">历史问答</a>
   </div>
-  <div class="status"><span style="display:flex;align-items:center;gap:6px"><span class="dot"></span>服务在线 · {{ sites|length }} 个机位</span></div>
+  <div class="status">第 9 组 · 智汇新阳</div>
 </nav>
 
 {% block body %}{% endblock %}
