@@ -98,7 +98,9 @@ def _where(site: str = "", days: int = 0):
         sql.append("site = ?")
         args.append(site)
     if days:
-        sql.append("ts >= datetime('now', ?)")
+        # SQLite 的 now 恒为 UTC，而 ts 存的是本地时间（容器 TZ=Asia/Shanghai）。
+        # 不加 localtime 的话「最近 N 天」会偏一个时区的量。
+        sql.append("ts >= datetime('now', 'localtime', ?)")
         args.append("-%d days" % int(days))
     return (" WHERE " + " AND ".join(sql)) if sql else "", args
 
@@ -129,7 +131,7 @@ def series(site: str, metric: str, days: int = 30) -> list:
         conds.append("site = ?")
         args.append(site)
     if days:
-        conds.append("ts >= datetime('now', ?)")
+        conds.append("ts >= datetime('now', 'localtime', ?)")
         args.append("-%d days" % int(days))
 
     sql = ("SELECT ts, %s AS v FROM runs WHERE %s ORDER BY ts ASC"

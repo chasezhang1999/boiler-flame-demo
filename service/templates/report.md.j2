@@ -11,7 +11,12 @@
 
 {% endif -%}
 
-# {{ badge }}{% if score is not none %}　{{ score }}/100{% endif %}
+# 炉膛结焦风险评估报告
+{% if site %}
+{{ site }}
+{% endif %}
+
+## {{ badge }}{% if score is not none %}　{{ score }}/100{% endif %}
 {% if headline %}
 **{{ headline }}**
 {% endif %}

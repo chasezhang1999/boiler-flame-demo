@@ -31,18 +31,13 @@ LLM_BASE = os.environ.get("LLM_BASE", "https://api.deepseek.com/v1").rstrip("/")
 LLM_KEY = os.environ.get("LLM_API_KEY", "")
 LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-v4-flash-vision-exp")
 
-PROMPT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                           "dify", "prompts", "risk_assessment.md")
+# 复用 build_workflow 的加载器：它会把 {{BANDS}} 换成 report.py 里的实际区间，
+# 这样补录用的提示词和工作流里那份逐字一致，评估结果才有参考价值。
+from tools.build_workflow import load_prompt   # noqa: E402
 
 
-def load_prompt():
-    """从 prompts 文件里抠出 ```text 代码块，保证跟工作流用的是同一份。"""
-    txt = open(PROMPT_PATH, encoding="utf-8").read()
-    i = txt.find("```text")
-    j = txt.find("```", i + 7)
-    if i == -1 or j == -1:
-        raise SystemExit("提示词文件里没找到 ```text 代码块：%s" % PROMPT_PATH)
-    return txt[i + 7:j].strip()
+def _load():
+    return load_prompt("risk_assessment.md")
 
 
 def judge(client, img_b64, metrics, prompt):
@@ -72,6 +67,9 @@ def main():
     ap.add_argument("dir", help="照片目录")
     ap.add_argument("--days", type=int, default=45, help="把时间打散在最近多少天内")
     ap.add_argument("--dry", action="store_true", help="只跑 CV 不调模型不落库")
+    ap.add_argument("--no-write", action="store_true", dest="no_write",
+                    help="跑完整链路但不落台账，用于评估提示词改动的效果")
+    ap.add_argument("--limit", type=int, default=0, help="只跑前 N 张")
     a = ap.parse_args()
 
     if not LLM_KEY and not a.dry:
@@ -79,10 +77,12 @@ def main():
 
     files = sorted(f for f in os.listdir(a.dir)
                    if f.lower().endswith((".png", ".jpg", ".jpeg")))
+    if a.limit:
+        files = files[:a.limit]
     if not files:
         raise SystemExit("目录里没有图片：%s" % a.dir)
 
-    prompt = load_prompt()
+    prompt = _load()
     # 机组随机但尽量铺开：先打乱全部位置，轮着用，保证 16 个位置都有数据
     pool = []
     now = time.time()
@@ -120,6 +120,15 @@ def main():
                     continue
 
                 text = judge(c, base64.b64encode(raw).decode(), an["metrics"], prompt)
+
+                if a.no_write:
+                    from service import report as rp_mod
+                    d = rp_mod.parse_assessment(text)
+                    print("  [%2d/%d] %-18s %-4s %3s  %s"
+                          % (n, len(files), fn, d.get("risk_level", "?"),
+                             d.get("score", "?"), (d.get("headline") or "(无 headline)")[:26]))
+                    ok += 1
+                    continue
 
                 rp = c.post("%s/report" % BASE, timeout=60, data={
                     "assessment_text": text,

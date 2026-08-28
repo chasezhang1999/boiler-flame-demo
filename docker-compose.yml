@@ -7,10 +7,16 @@ services:
     ports:
       # 只绑本地，对外走 1Panel openresty 反代
       - "127.0.0.1:18800:8000"
+    environment:
+      # 容器默认 UTC，台账时间会比本地早 8 小时。改这里同时影响
+      # 报告上的拍摄时间、台账 ts 和「最近 N 天」的筛选。
+      - TZ=Asia/Shanghai
     env_file: .env          # BASE_URL / DIFY_* / LLM_*，不进 git
     volumes:
       - ./static:/app/static   # 生成的图片和报告页
       - ./data:/app/data       # 台账 SQLite，必须持久化
+      # 批量补录真实照片时把图片放这里：tools/import_photos.py /app/inbox
+      - ./inbox:/app/inbox:ro
     networks: [default, dify]
 
 networks:

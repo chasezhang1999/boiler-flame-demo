@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>锅炉结焦风险评估报告</title>
+<title>炉膛结焦风险评估报告{% if site %} · {{ site }}{% endif %}</title>
 {# 字体自托管，不走 fonts.googleapis.com：国内连不上，而这个 link 阻塞渲染，
    挂上去报告页会白屏等到超时。文件用 fetch_fonts.py 抓取。 #}
 <link rel="stylesheet" href="/assets/fonts/fonts.css">
@@ -25,6 +25,8 @@
   .brand{font-family:var(--h);font-weight:600;font-size:13px;letter-spacing:.08em;
          text-transform:uppercase;color:#416180}
   .top .meta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .doctitle{font-size:31px;line-height:1.15;margin:22px 0 0}
+  .docsub{font-size:14px;color:var(--muted);margin-top:5px}
 
   /* 结论条：等级 + 一句话原因 + 分数 + 三档标尺 */
   .verdict{background:var(--tint);border:1px solid var(--tint-line);
@@ -133,19 +135,21 @@
 </style></head><body><div class="wrap">
 
 <div class="top">
-  <div style="display:flex;align-items:baseline;gap:14px">
-    <span class="brand">锅炉运行分析助手</span>
-    <span style="font-size:13px;color:var(--muted)">炉膛结焦风险评估</span>
-  </div>
+  <span class="brand">锅炉运行分析助手</span>
   <div class="meta">{{ meta }}</div>
 </div>
+
+{# 标题不能挂在 headline 上：模型偶尔不返回它，那样整页就没标题了。
+   固定标题保证一定有，headline 有值时作为副标题补充。 #}
+<h1 class="doctitle">炉膛结焦风险评估报告</h1>
+{% if site %}<div class="docsub">{{ site }}</div>{% endif %}
 
 <div class="verdict">
   <div>
     <div class="kicker">结论</div>
     <div class="vhead">
       <span class="lv">{{ level_label }}</span>
-      {% if headline %}<span class="vtitle">{{ headline }}</span>{% endif %}
+      <span class="vtitle">{{ headline or level_label }}</span>
     </div>
     <div class="vsum">
       {%- if hotspots %}检出 {{ hotspots|length }} 处贴壁亮斑{% if abnormal_count %}，{% endif %}{% endif -%}

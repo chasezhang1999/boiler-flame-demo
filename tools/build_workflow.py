@@ -48,6 +48,36 @@ REJECT_CODE = '''def main() -> dict:
 '''
 
 
+def bands_text():
+    """把 report.py 里的参考区间渲染成给模型看的清单。"""
+    sys.path.insert(0, ROOT)
+    from service import report
+    lines = []
+    for key, lab, unit, span, band, low_w, high_w, signed in report.METRICS:
+        if band is None:
+            lines.append("- %s：检出即为关注项" % lab)
+        elif signed:
+            lines.append("- %s：±%g%s 以内" % (lab, band[1], unit))
+        elif band[0] == 0:
+            lines.append("- %s：不超过 %g%s" % (lab, band[1], unit))
+        elif span is not None and band[1] >= span:
+            lines.append("- %s：不低于 %g%s（越大越好）" % (lab, band[0], unit))
+        else:
+            lines.append("- %s：%g ~ %g%s" % (lab, band[0], band[1], unit))
+    return "\n".join(lines)
+
+
+def load_prompt(name):
+    """从 prompts/*.md 里抠出 ```text 代码块，并填掉 {{BANDS}} 占位符。"""
+    path = os.path.join(ROOT, "dify", "prompts", name)
+    txt = open(path, encoding="utf-8").read()
+    i = txt.find("```text")
+    j = txt.find("```", i + 7)
+    if i == -1 or j == -1:
+        raise SystemExit("提示词文件里没找到 ```text 代码块：%s" % path)
+    return txt[i + 7:j].strip().replace("{{BANDS}}", bands_text())
+
+
 def node(nid, data, x, y, w=244, h=90):
     return {
         "data": data, "height": h, "id": nid,
@@ -83,6 +113,13 @@ def main():
     llm = nodes["llm_node"]
     model_cfg = copy.deepcopy(llm["data"]["model"])
     model_cfg["completion_params"] = {"temperature": 0}   # 判别题不需要发挥
+
+    # 判级提示词以 prompts 文件为准，不沿用线上那份 —— 线上是历史版本，
+    # 界面上改过就再没同步回来过。参考区间从 report.py 注入，
+    # 重标之后不会和模型看到的脱节。
+    llm["data"]["prompt_template"] = [
+        {"role": "system", "text": load_prompt("risk_assessment.md"), "id": "risk-sys"}
+    ]
 
     # 1) 图像校验节点：跟判级节点用同一个模型，视觉同样指向 start_node/photo
     g["nodes"].append(node("check_node", {
