@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>锅炉结焦风险评估报告</title>
+{# 字体自托管，不走 fonts.googleapis.com：国内连不上，而这个 link 阻塞渲染，
+   挂上去报告页会白屏等到超时。文件用 fetch_fonts.py 抓取。 #}
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
+<style>
+  :root{
+    --ink:#1d1f20;--muted:#5d5d60;--faint:#98989b;--line:#e3e3e6;
+    --accent:{{ color }};--tint:{{ bg }};--tint-line:{{ line }};
+    --low:{{ color_low }};--high:{{ color_high }};
+    --h:"Barlow Condensed",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+    --b:"Barlow",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--ink);font:15px/1.55 var(--b)}
+  .wrap{max-width:960px;margin:0 auto;padding:34px 34px 60px}
+  h1,h2,h3{font-family:var(--h);font-weight:600;letter-spacing:-.01em;margin:0}
+
+  /* 页眉：一行元信息，报告标题不占最重的位置——结论才占 */
+  .top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+       border-bottom:1px solid var(--line);padding-bottom:10px}
+  .brand{font-family:var(--h);font-weight:600;font-size:13px;letter-spacing:.08em;
+         text-transform:uppercase;color:#416180}
+  .top .meta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  /* 结论条：等级 + 一句话原因 + 分数 + 三档标尺 */
+  .verdict{background:var(--tint);border:1px solid var(--tint-line);
+           border-left:6px solid var(--accent);margin-top:27px;
+           padding:27px 30px 27px 24px;display:grid;
+           grid-template-columns:1fr auto;gap:27px;align-items:center}
+  .kicker{font-family:var(--h);font-weight:600;font-size:13px;letter-spacing:.1em;
+          text-transform:uppercase;color:#7a7a7d}
+  .vhead{display:flex;align-items:baseline;gap:12px;margin-top:6px;flex-wrap:wrap}
+  .lv{font-family:var(--h);font-weight:600;font-size:26px;line-height:1;
+      letter-spacing:.02em;background:var(--accent);color:#1d1f20;padding:5px 14px 3px}
+  .vtitle{font-family:var(--h);font-size:38px;line-height:1}
+  .vsum{font-size:14px;color:var(--muted);margin-top:12px;max-width:56ch;text-wrap:pretty}
+  .score{font-family:var(--h);font-size:64px;line-height:.9;font-variant-numeric:tabular-nums}
+  .score span{font-size:20px;color:var(--faint)}
+  .scale{display:flex;gap:4px;justify-content:flex-end;margin-top:14px}
+  .scale i{font-family:var(--h);font-style:normal;font-size:13px;letter-spacing:.06em;
+           padding:3px 11px;border:1px solid var(--line);color:var(--muted)}
+  .scale i.on{color:#1d1f20;font-weight:600}
+
+  /* 关键指标带：把最该先看的四项提到最前 */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);margin-top:1px}
+  .kpi{background:#fff;padding:16px 18px}
+  .kpi .k{font-size:12px;color:var(--muted)}
+  .kpi .v{display:flex;align-items:baseline;gap:5px;margin-top:5px}
+  .kpi .v b{font-family:var(--h);font-weight:600;font-size:30px;line-height:1;
+            font-variant-numeric:tabular-nums}
+  .kpi .v span{font-size:12px;color:var(--muted)}
+  .kpi .s{font-family:var(--h);font-size:12px;letter-spacing:.06em;margin-top:7px}
+
+  /* 图与区块 */
+  .imgs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:34px}
+  figure{margin:0;border:1px solid var(--line);padding:10px;break-inside:avoid}
+  figure img{width:100%;display:block;background:#e9e9ea}
+  figcaption{font-size:11px;color:var(--muted);margin-top:8px;display:flex;
+             justify-content:space-between;gap:10px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:34px}
+  .sec{break-inside:avoid}
+  .sechd{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+          border-bottom:1px solid var(--line);padding-bottom:6px}
+  .sechd h3{font-size:20px}
+  .tag{font-family:var(--h);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+       color:#416180;border:1px solid var(--line);padding:1px 7px;white-space:nowrap}
+  .tag.photo{border-color:#b5d9fd;background:#eef6ff}
+  .hint{font-size:11px;color:var(--muted)}
+  .hint b{font-weight:600}
+  ul.list{margin:12px 0 0;padding:0;list-style:none;display:grid;gap:9px}
+  ul.list li{display:grid;grid-template-columns:16px 1fr;gap:8px;font-size:14px;text-wrap:pretty}
+  ul.list li::before{content:"—";color:#749dc4}
+  .advice{background:#eef6ff;border:1px solid #b5d9fd;padding:18px 20px}
+  .advice h3{font-size:20px;margin-bottom:12px}
+  .advice ol{margin:0;padding:0;list-style:none;display:grid;gap:10px;counter-reset:s}
+  .advice li{counter-increment:s;display:grid;grid-template-columns:22px 1fr;gap:8px;
+             font-size:14px;text-wrap:pretty}
+  .advice li::before{content:counter(s,decimal-leading-zero);font-family:var(--h);
+             font-weight:600;color:#416180;font-variant-numeric:tabular-nums}
+
+  /* 指标表：灰带＝参考区间，竖线＝本次读数，越界按方向分色 */
+  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+  th,td{border-bottom:1px solid var(--line);padding:9px 0}
+  .mt th{text-align:left;font-weight:400;width:30%}
+  .mt .barcell{width:38%;padding-right:24px}
+  .mt .num{width:16%;text-align:right;font-variant-numeric:tabular-nums;
+           font-weight:600;white-space:nowrap}
+  .mt .num .unit{color:var(--muted);font-weight:400;font-size:12px;margin-left:2px}
+  .mt .st{width:16%;padding-left:18px}
+  .track{position:relative;height:10px;background:#eeeef0}
+  .track .band{position:absolute;top:0;bottom:0;background:#d4d4d7}
+  .track .zero{position:absolute;top:-2px;bottom:-2px;left:50%;width:1px;background:var(--faint)}
+  .track .mark{position:absolute;top:-3px;bottom:-3px;transform:translateX(-50%)}
+  .range{font-size:10.5px;color:var(--faint);margin-top:4px;font-variant-numeric:tabular-nums}
+  .state{display:inline-block;font-family:var(--h);font-size:13px;letter-spacing:.05em;
+         padding:1px 8px;border:1px solid transparent}
+  .grid th{font-family:var(--h);font-weight:600;font-size:12px;letter-spacing:.08em;
+           text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 4px}
+  .grid td{padding:9px 4px}
+  .grid .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  .muted{color:var(--muted);font-size:13.5px}
+  .raw{white-space:pre-wrap;background:#f5f5f8;padding:12px;font-size:13px;overflow-x:auto}
+  details{margin-top:14px}
+  summary{cursor:pointer;color:var(--muted);font-size:13.5px}
+  details pre{white-space:pre-wrap;background:#f5f5f8;padding:12px;font-size:12.5px;
+              margin-top:8px;overflow-x:auto}
+  .note{margin-top:27px;border-top:1px solid var(--line);padding-top:12px;
+        font-size:12px;color:var(--muted);text-wrap:pretty}
+  .note b{color:var(--ink);font-weight:600}
+  a{color:#416180;text-underline-offset:3px}
+  a:hover{color:#2c455d}
+
+  @media(max-width:760px){
+    .wrap{padding:20px 16px 48px}
+    .verdict{grid-template-columns:1fr;gap:16px}
+    .verdict .right{text-align:left}
+    .scale{justify-content:flex-start}
+    .vtitle{font-size:30px}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .imgs,.cols{grid-template-columns:1fr;gap:20px}
+    .mt th{width:40%}.mt .barcell{display:none}.mt .num{width:30%}.mt .st{width:30%}
+  }
+  @media print{
+    .wrap{padding:0}
+    details{display:none}
+    .verdict,.kpis,figure,.sec,table{break-inside:avoid}
+    a[href]::after{content:""}
+  }
+</style></head><body><div class="wrap">
+
+<div class="top">
+  <div style="display:flex;align-items:baseline;gap:14px">
+    <span class="brand">锅炉运行分析助手</span>
+    <span style="font-size:13px;color:var(--muted)">炉膛结焦风险评估</span>
+  </div>
+  <div class="meta">{{ meta }}</div>
+</div>
+
+<div class="verdict">
+  <div>
+    <div class="kicker">结论</div>
+    <div class="vhead">
+      <span class="lv">{{ level_label }}</span>
+      {% if headline %}<span class="vtitle">{{ headline }}</span>{% endif %}
+    </div>
+    <div class="vsum">
+      {%- if hotspots %}检出 {{ hotspots|length }} 处贴壁亮斑{% if abnormal_count %}，{% endif %}{% endif -%}
+      {%- if abnormal_count %}{{ abnormal_count }} 项指标超出参考区间{% endif -%}
+      {%- if not hotspots and not abnormal_count %}各项指标均在参考区间内，未检出贴壁亮斑{% endif -%}
+      。{% if suggestions %}{{ suggestions[0] }}{% endif %}
+    </div>
+  </div>
+  <div class="right" style="text-align:right">
+    {% if score is not none %}<div class="score">{{ score }}<span>/100</span></div>{% endif %}
+    <div class="scale">
+      {% for l in levels %}
+      <i class="{% if l.active %}on{% endif %}"
+         style="border-color:{{ l.line }}{% if l.active %};background:{{ l.ink }}{% endif %}">{{ l.label }}</i>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% if abnormal %}
+<div class="kpis">
+  {% for m in abnormal[:4] %}
+  <div class="kpi">
+    <div class="k">{{ m.label }}</div>
+    <div class="v"><b>{{ m.value }}</b><span>{{ m.unit }}</span></div>
+    <div class="s" style="color:{{ m.color }}">{{ m.state }} {{ m.arrow }} · {{ m.range_text }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="imgs">
+  <figure>
+    <img src="{{ contour_url }}" alt="火焰轮廓">
+    <figcaption><span>火焰等值轮廓</span><span>红十字＝形心 · 品红框＝疑似贴壁亮斑</span></figcaption>
+  </figure>
+  <figure>
+    <img src="{{ heatmap_url }}" alt="相对亮温分布">
+    <figcaption><span>相对亮温分布</span><span>越亮越热 · 未标定</span></figcaption>
+  </figure>
+</div>
+
+{% if parsed %}
+<div class="cols">
+  <div class="sec">
+    <div class="sechd"><h3>图像观察</h3><span class="tag photo">仅来自照片</span></div>
+    {% if visual %}
+    <ul class="list">{% for x in visual %}<li><span>{{ x }}</span></li>{% endfor %}</ul>
+    {% else %}<p class="muted" style="margin-top:12px">模型未给出图像观察。</p>{% endif %}
+  </div>
+  <div class="sec">
+    <div class="sechd"><h3>指标发现</h3><span class="tag">仅来自量化指标</span></div>
+    {% if metric %}
+    <ul class="list">{% for x in metric %}<li><span>{{ x }}</span></li>{% endfor %}</ul>
+    {% else %}<p class="muted" style="margin-top:12px">模型未给出指标发现。</p>{% endif %}
+  </div>
+</div>
+
+<div class="cols" style="margin-top:27px">
+  <div class="sec">
+    <div class="sechd"><h3>判据</h3></div>
+    {% if reasons %}
+    <ul class="list">{% for x in reasons %}<li><span>{{ x }}</span></li>{% endfor %}</ul>
+    {% else %}<p class="muted" style="margin-top:12px">—</p>{% endif %}
+  </div>
+  {% if suggestions %}
+  <div class="sec advice">
+    <h3>运行调整建议</h3>
+    <ol>{% for x in suggestions %}<li><span>{{ x }}</span></li>{% endfor %}</ol>
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<div class="sec" style="margin-top:34px">
+  <div class="sechd"><h3>模型原始输出</h3><span class="tag">未按 JSON 返回</span></div>
+  <pre class="raw" style="margin-top:12px">{{ raw_text }}</pre>
+</div>
+{% endif %}
+
+<div class="sec" style="margin-top:34px">
+  <div class="sechd">
+    <h3>量化指标</h3>
+    <span class="hint">灰带＝参考区间 · 竖线＝本次读数 ·
+      <b style="color:var(--high)">橙＝高于区间</b> /
+      <b style="color:var(--low)">蓝＝低于区间</b></span>
+  </div>
+  <table class="mt"><tbody>
+  {% for m in metrics %}
+    <tr>
+      <th>{{ m.label }}</th>
+      <td class="barcell">
+        {% if m.has_bar %}
+        <div class="track">
+          <div class="band" style="left:{{ m.band_left }}%;width:{{ m.band_width }}%"></div>
+          {% if m.zero_tick %}<div class="zero"></div>{% endif %}
+          <div class="mark" style="left:{{ m.mark_left }}%;width:{{ m.mark_width }}px;background:{{ m.mark_color }}"></div>
+        </div>
+        <div class="range">参考 {{ m.range_text }}{% if m.signed %} · 轴中心＝0{% endif %}</div>
+        {% else %}
+        <span class="range">无量程 · 计数项</span>
+        {% endif %}
+      </td>
+      <td class="num" style="color:{{ m.value_color }}">{{ m.value }}<span class="unit">{{ m.unit }}</span></td>
+      <td class="st">
+        <span class="state"
+              style="color:{% if m.abnormal %}#fff{% else %}{{ color_ok }}{% endif %};
+                     background:{% if m.abnormal %}{{ m.color }}{% else %}transparent{% endif %};
+                     border-color:{% if m.abnormal %}{{ m.color }}{% else %}transparent{% endif %}">{{ m.state }}</span>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+
+<div class="sec" style="margin-top:34px">
+  <div class="sechd"><h3>疑似贴壁亮斑</h3></div>
+  {% if hotspots %}
+  <table class="grid">
+    <thead><tr><th>位置</th><th style="text-align:right">面积占比 %</th><th style="text-align:right">相对亮温</th></tr></thead>
+    <tbody>
+    {% for s in hotspots %}
+      <tr><td>{{ s.pos }}</td><td class="num">{{ s.area }}</td><td class="num">{{ s.temp }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted" style="margin-top:12px">未检出主火焰之外的贴壁亮斑。</p>
+  {% endif %}
+
+  <details><summary>展开全部原始指标</summary><pre>{{ metrics_json }}</pre></details>
+</div>
+
+<div class="note">
+  <b>说明</b>：热力图为基于可见光 R/G 通道比推算的<b>未标定相对亮温</b>，不代表实际温度；
+  参考区间为 demo 期经验值，未经历史样本标定；风险判级由视觉模型结合图像指标推断。
+  本报告仅用于技术演示，不作为运行调整依据。
+</div>
+
+</div></body></html>

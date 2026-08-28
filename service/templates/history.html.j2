@@ -1,0 +1,114 @@
+{% extends "base.html.j2" %}
+{% set page = "history" %}
+{% block title %}历史台账 · 锅炉运行分析助手{% endblock %}
+
+{% block body %}
+<div class="card">
+  <div class="row">
+    <div>
+      <label for="site">机组 / 位置</label>
+      <select id="site">
+        <option value="">全部机组</option>
+        {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="days">时间范围</label>
+      <select id="days">
+        <option value="7">最近 7 天</option>
+        <option value="30" selected>最近 30 天</option>
+        <option value="90">最近 90 天</option>
+        <option value="0">全部</option>
+      </select>
+    </div>
+    <div>
+      <label for="metric">趋势指标</label>
+      <select id="metric">
+        <option value="temp_index_p95">相对亮温 P95</option>
+        <option value="flame_fill_ratio_pct">火焰充满度</option>
+        <option value="centroid_offset_total_pct">火焰中心偏斜</option>
+        <option value="high_temp_area_pct">高温区占比</option>
+        <option value="contour_circularity">轮廓圆度</option>
+        <option value="wall_hotspot_area_pct">贴壁亮斑面积</option>
+      </select>
+    </div>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <button id="btn-go">查询</button>
+    <button id="btn-csv" class="ghost">导出 CSV</button>
+  </div>
+</div>
+
+<div id="stat" class="card" hidden></div>
+
+<div class="card">
+  <h2 style="font-size:16px;margin-bottom:10px">趋势</h2>
+  <img id="chart" style="width:100%;display:block" alt="趋势图">
+</div>
+
+<div class="card">
+  <h2 style="font-size:16px;margin-bottom:10px">分析记录</h2>
+  <div style="overflow-x:auto"><table id="tbl">
+    <thead><tr><th>时间</th><th>机组 / 位置</th><th>等级</th><th class="num">评分</th>
+      <th>结论</th><th>报告</th></tr></thead>
+    <tbody><tr><td colspan="6" class="muted">加载中…</td></tr></tbody>
+  </table></div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+const $ = s => document.querySelector(s);
+const q = () => ({site:$('#site').value, days:$('#days').value, metric:$('#metric').value});
+
+async function load(){
+  const {site, days, metric} = q();
+  const qs = new URLSearchParams({site, days}).toString();
+
+  $('#chart').src = '/api/chart?' + new URLSearchParams({site, days, metric}) +
+                    '&_=' + Date.now();
+
+  const s = await (await fetch('/api/summary?' + qs)).json();
+  $('#stat').hidden = false;
+  if(!s.total){
+    $('#stat').innerHTML = '<div class="muted">该条件下台账里还没有记录。</div>';
+  } else {
+    const lv = s.levels || {};
+    $('#stat').innerHTML =
+      '<div class="row" style="align-items:baseline">' +
+      '<div><div class="muted">分析次数</div><div style="font:600 26px var(--h)">' + s.total + '</div></div>' +
+      ['高','中','低'].map(k =>
+        '<div><div class="muted">' + k + '风险</div><div style="font:600 26px var(--h)">' +
+        (lv[k]||0) + '</div></div>').join('') +
+      '<div style="flex:2"><div class="muted">最近一次</div><div>' +
+        (s.latest ? esc(s.latest.ts) + '　<span class="lv ' + esc(s.latest.risk_level) + '">' +
+          esc(s.latest.risk_level) + '</span>' : '—') + '</div></div>' +
+      '</div>';
+  }
+
+  const h = await (await fetch('/api/history?' + qs + '&limit=200')).json();
+  const tb = $('#tbl tbody');
+  if(!h.rows.length){
+    tb.innerHTML = '<tr><td colspan="6" class="muted">没有记录。先去「拍照分析」跑几次。</td></tr>';
+    return;
+  }
+  tb.innerHTML = h.rows.map(r =>
+    '<tr>' +
+    '<td style="white-space:nowrap">' + esc(r.ts) + '</td>' +
+    '<td>' + esc(r.site_label) + '</td>' +
+    '<td><span class="lv ' + esc(r.risk_level) + '">' + esc(r.risk_level) + '</span></td>' +
+    '<td class="num">' + (r.score==null?'—':r.score) + '</td>' +
+    '<td>' + esc(r.headline||'') + '</td>' +
+    '<td>' + (r.report_url ? '<a href="'+esc(r.report_url)+'" target="_blank">打开</a>' : '—') + '</td>' +
+    '</tr>').join('');
+}
+
+$('#btn-go').onclick = load;
+$('#btn-csv').onclick = () => {
+  const {site, days} = q();
+  location.href = '/api/ledger.csv?' + new URLSearchParams({site, days});
+};
+['site','days','metric'].forEach(id => $('#'+id).onchange = load);
+load();
+</script>
+{% endblock %}

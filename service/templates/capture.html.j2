@@ -1,0 +1,87 @@
+{% extends "base.html.j2" %}
+{% set page = "capture" %}
+{% block title %}拍照分析 · 锅炉运行分析助手{% endblock %}
+
+{% block body %}
+<div class="card">
+  <label for="site">机组 / 位置</label>
+  <select id="site">
+    <option value="">请选择…</option>
+    {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+  </select>
+
+  <div class="row" style="margin-top:16px">
+    {# capture="environment" 让手机直接开后置摄像头，不弹「拍照/相册/浏览」选单。
+       桌面浏览器会忽略这个属性，退化成普通文件选择，所以下面还留了一个入口。 #}
+    <button id="btn-shot" style="flex:2">📷 拍照</button>
+    <button id="btn-pick" class="ghost">从相册选</button>
+  </div>
+  <input id="cam"  type="file" accept="image/*" capture="environment" hidden>
+  <input id="pick" type="file" accept="image/*" hidden>
+
+  <div id="preview-wrap" hidden style="margin-top:14px">
+    <img id="preview" style="width:100%;border:1px solid var(--line);display:block">
+    <div class="row" style="margin-top:10px">
+      <button id="btn-go" style="flex:2">开始分析</button>
+      <button id="btn-reset" class="ghost">重拍</button>
+    </div>
+  </div>
+  <div id="err" class="err" hidden></div>
+</div>
+
+<div id="result" class="card md" hidden></div>
+{% endblock %}
+
+{% block script %}
+<script>
+const $ = s => document.querySelector(s);
+let file = null;
+
+function showErr(m){ const e=$('#err'); e.textContent=m; e.hidden=!m; }
+
+function onPicked(f){
+  if(!f) return;
+  file = f;
+  $('#preview').src = URL.createObjectURL(f);
+  $('#preview-wrap').hidden = false;
+  showErr('');
+  $('#result').hidden = true;
+}
+$('#btn-shot').onclick = () => $('#cam').click();
+$('#btn-pick').onclick = () => $('#pick').click();
+$('#cam').onchange  = e => onPicked(e.target.files[0]);
+$('#pick').onchange = e => onPicked(e.target.files[0]);
+$('#btn-reset').onclick = () => {
+  file=null; $('#preview-wrap').hidden=true; $('#result').hidden=true; showErr('');
+  $('#cam').value=''; $('#pick').value='';
+};
+
+$('#btn-go').onclick = async () => {
+  const site = $('#site').value;
+  if(!site){ showErr('请先选择机组 / 位置——台账要按它归档。'); return; }
+  if(!file){ showErr('还没有照片。'); return; }
+
+  const btn = $('#btn-go');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>分析中，约 20 秒…';
+  showErr('');
+
+  try{
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('site', site);
+    const r = await fetch('/api/analyze', {method:'POST', body:fd});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.detail || ('HTTP ' + r.status));
+    $('#result').innerHTML = md2html(j.summary || '（工作流没有返回内容）');
+    $('#result').hidden = false;
+    $('#result').scrollIntoView({behavior:'smooth', block:'start'});
+  }catch(e){
+    showErr('分析失败：' + e.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = '开始分析';
+  }
+};
+</script>
+{% endblock %}

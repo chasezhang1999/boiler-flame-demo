@@ -1,0 +1,102 @@
+# ---------------------------------------------------------------- 接口
+
+@app.post("/analyze")
+async def analyze(file: UploadFile = File(...)):
+    t0 = time.time()
+    bgr = _decode(await file.read())
+    full, mask = _flame_mask(bgr)
+    temp = _temp_index(bgr)
+    spots = _wall_hotspots(temp, full, mask)
+
+    tag = f"{int(time.time())}_{uuid.uuid4().hex[:6]}"
+    contour_name, heat_name = f"{tag}_contour.jpg", f"{tag}_heat.jpg"
+    q = [cv2.IMWRITE_JPEG_QUALITY, 90]
+    cv2.imwrite(os.path.join(STATIC_DIR, contour_name), _draw_contours(bgr, temp, mask, spots), q)
+    # 热力图用 full：贴壁亮斑也要显示成高温，不能被压暗
+    cv2.imwrite(os.path.join(STATIC_DIR, heat_name), _draw_heatmap(bgr, temp, full), q)
+
+    return {
+        "metrics": _metrics(bgr, temp, mask, full, spots),
+        "contour_url": f"{BASE_URL}/static/{contour_name}",
+        "heatmap_url": f"{BASE_URL}/static/{heat_name}",
+        "elapsed_ms": int((time.time() - t0) * 1000),
+    }
+
+
+@app.post("/report")
+async def make_report(
+    assessment_text: str = Form(""),
+    metrics_json: str = Form("{}"),
+    contour_url: str = Form(""),
+    heatmap_url: str = Form(""),
+    shot_at: str = Form(""),
+    site: str = Form(""),
+):
+    """
+    把模型判级 + CV 指标渲染成一张独立 HTML 报告页，返回它的地址。
+
+    走 form-data 而不是 JSON：模型输出里带换行和引号，塞进 Dify 的 JSON body
+    模板会把请求体撑坏，表单字段没这个问题。
+    """
+    try:
+        metrics = json.loads(metrics_json) if metrics_json.strip() else {}
+        if not isinstance(metrics, dict):
+            metrics = {}
+    except Exception:
+        metrics = {}
+
+    if not shot_at:
+        shot_at = time.strftime("%Y-%m-%d %H:%M")
+
+    # 报告页文件名要先定下来，markdown 开头得引用它
+    name = f"{int(time.time())}_{uuid.uuid4().hex[:6]}_report.html"
+    report_url = f"{BASE_URL}/static/{name}"
+
+    # 两套模板共用一份上下文，模型输出只解析一次
+    ctx = report_tpl.build_context(
+        assessment_text, metrics, contour_url, heatmap_url,
+        report_url, shot_at, site
+    )
+    with open(os.path.join(STATIC_DIR, name), "w", encoding="utf-8") as f:
+        f.write(report_tpl.render_html(ctx))
+
+    return {
+        "report_url": report_url,
+        "risk_level": ctx["level"],
+        "markdown": report_tpl.render_markdown_from(ctx),
+    }
+
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    """自带一个上传页，Dify 还没搭好时先验证 CV 效果。"""
+    return """
+<meta charset="utf-8"><title>火焰 CV 服务自检</title>
+<style>
+ body{font-family:system-ui,"Microsoft YaHei",sans-serif;max-width:1100px;margin:40px auto;padding:0 20px;background:#111;color:#eee}
+ h1{font-size:20px} img{max-width:100%;border-radius:6px;border:1px solid #333}
+ .row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}
+ pre{background:#1c1c1c;padding:14px;border-radius:6px;overflow-x:auto;font-size:13px}
+ button{padding:8px 18px;background:#e8642c;color:#fff;border:0;border-radius:5px;cursor:pointer}
+</style>
+<h1>锅炉火焰 CV 服务 · 自检页</h1>
+<p style="color:#888;font-size:14px">这页只验证图像处理，风险判级在 Dify 工作流里做。</p>
+<input type="file" id="f" accept="image/*"> <button onclick="go()">分析</button>
+<div class="row"><div><h3>轮廓</h3><img id="c"></div><div><h3>热力图</h3><img id="h"></div></div>
+<h3>指标</h3><pre id="m">等待上传…</pre>
+<script>
+async function go(){
+  const f=document.getElementById('f').files[0]; if(!f)return;
+  document.getElementById('m').textContent='处理中…';
+  const fd=new FormData(); fd.append('file',f);
+  const r=await fetch('/analyze',{method:'POST',body:fd}); const j=await r.json();
+  document.getElementById('c').src=j.contour_url; document.getElementById('h').src=j.heatmap_url;
+  document.getElementById('m').textContent=JSON.stringify(j.metrics,null,2);
+}
+</script>
+"""

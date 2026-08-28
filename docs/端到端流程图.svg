@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1190" viewBox="0 0 1120 1190"
+     font-family="Microsoft YaHei, PingFang SC, Hiragino Sans GB, sans-serif">
+
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1F4E79"/>
+    </marker>
+    <marker id="ahr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#C0392B"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1120" height="1190" fill="#FFFFFF"/>
+
+  <!-- 标题 -->
+  <text x="24" y="34" font-size="20" font-weight="bold" fill="#1F4E79">火电机组锅炉运行分析助手 · 端到端流程</text>
+  <text x="24" y="54" font-size="12.5" fill="#5A6B7C">第 9 组 智汇新阳 ·「炉智检」Demo　|　拍照上传 → 图像分析 → 综合研判 → 结果报告</text>
+
+  <!-- ── 泳道 ───────────────────────────────────────────────── -->
+  <g>
+    <rect x="70"  y="62" width="260" height="1084" fill="#FFFFFF" stroke="#C9D6E4" stroke-width="1"/>
+    <rect x="330" y="62" width="280" height="1084" fill="#F4F8FC" stroke="#C9D6E4" stroke-width="1"/>
+    <rect x="610" y="62" width="260" height="1084" fill="#FFFFFF" stroke="#C9D6E4" stroke-width="1"/>
+    <rect x="870" y="62" width="234" height="1084" fill="#F4F8FC" stroke="#C9D6E4" stroke-width="1"/>
+
+    <rect x="70"  y="62" width="260" height="42" fill="#1F4E79"/>
+    <rect x="330" y="62" width="280" height="42" fill="#1F4E79"/>
+    <rect x="610" y="62" width="260" height="42" fill="#1F4E79"/>
+    <rect x="870" y="62" width="234" height="42" fill="#1F4E79"/>
+
+    <text x="200" y="89" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">巡检人员</text>
+    <text x="470" y="89" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">工作流编排（Dify）</text>
+    <text x="740" y="89" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">图像分析服务</text>
+    <text x="987" y="89" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">视觉大模型</text>
+  </g>
+
+  <!-- ── 节点 ───────────────────────────────────────────────── -->
+
+  <!-- R1 起点：用户拍照 -->
+  <rect x="100" y="117" width="200" height="56" rx="26" fill="#E7EEF6" stroke="#1F4E79" stroke-width="2"/>
+  <text x="200" y="140" font-size="13" font-weight="bold" fill="#1F3864" text-anchor="middle">拍摄炉膛火焰照片</text>
+  <text x="200" y="159" font-size="12.5" fill="#1F3864" text-anchor="middle">上传并填写机组 · 位置</text>
+
+  <!-- R2 ① 开始 -->
+  <rect x="355" y="217" width="230" height="56" fill="#FFFFFF" stroke="#1F4E79" stroke-width="1.6"/>
+  <text x="470" y="240" font-size="13" font-weight="bold" fill="#1F3864" text-anchor="middle">① 开始节点</text>
+  <text x="470" y="259" font-size="12.5" fill="#1F3864" text-anchor="middle">接收火焰图像与文本输入</text>
+
+  <!-- R3 判断：图像是否可用（浅底深字） -->
+  <path d="M 470 312 L 565 350 L 470 388 L 375 350 Z" fill="#FFF4D6" stroke="#C9A227" stroke-width="1.8"/>
+  <text x="470" y="355" font-size="13" font-weight="bold" fill="#6B5200" text-anchor="middle">图像是否可用？</text>
+
+  <!-- 退回 A -->
+  <rect x="100" y="324" width="200" height="52" fill="#FCEDEC" stroke="#C0392B" stroke-width="1.5"/>
+  <text x="200" y="345" font-size="12.5" font-weight="bold" fill="#922B21" text-anchor="middle">提示重新拍摄</text>
+  <text x="200" y="363" font-size="12" fill="#922B21" text-anchor="middle">过暗 · 过曝 · 无效</text>
+
+  <!-- R4 ② 图像分析 -->
+  <rect x="635" y="428" width="210" height="68" fill="#EAF2FA" stroke="#1F4E79" stroke-width="1.6"/>
+  <text x="740" y="450" font-size="13" font-weight="bold" fill="#1F3864" text-anchor="middle">② 图像分析</text>
+  <text x="740" y="469" font-size="12" fill="#1F3864" text-anchor="middle">Otsu 分割 · 三级等值轮廓</text>
+  <text x="740" y="486" font-size="12" fill="#1F3864" text-anchor="middle">相对热度映射 · 贴壁亮斑检出</text>
+
+  <!-- R5 产出（数据形） -->
+  <path d="M 647 546 L 857 546 L 845 598 L 635 598 Z" fill="#FFFFFF" stroke="#1F4E79" stroke-width="1.4"/>
+  <text x="746" y="567" font-size="12.5" font-weight="bold" fill="#1F3864" text-anchor="middle">轮廓图 · 相对热度图</text>
+  <text x="744" y="585" font-size="12" fill="#1F3864" text-anchor="middle">7 项量化指标</text>
+
+  <!-- R6 ③ 结果解析 -->
+  <rect x="355" y="644" width="230" height="56" fill="#FFFFFF" stroke="#1F4E79" stroke-width="1.6"/>
+  <text x="470" y="667" font-size="13" font-weight="bold" fill="#1F3864" text-anchor="middle">③ 结果解析</text>
+  <text x="470" y="686" font-size="12.5" fill="#1F3864" text-anchor="middle">整理为模型可读文本</text>
+
+  <!-- R7 ④ 综合研判 -->
+  <rect x="890" y="744" width="194" height="56" fill="#FFFFFF" stroke="#1F4E79" stroke-width="1.6"/>
+  <text x="987" y="767" font-size="13" font-weight="bold" fill="#1F3864" text-anchor="middle">④ 综合研判</text>
+  <text x="987" y="786" font-size="12" fill="#1F3864" text-anchor="middle">风险等级 · 判据 · 建议</text>
+
+  <!-- R8 判断：证据是否充分 -->
+  <path d="M 470 839 L 565 877 L 470 915 L 375 877 Z" fill="#FFF4D6" stroke="#C9A227" stroke-width="1.8"/>
+  <text x="470" y="882" font-size="13" font-weight="bold" fill="#6B5200" text-anchor="middle">证据是否充分？</text>
+
+  <!-- 退回 B -->
+  <rect x="100" y="851" width="200" height="52" fill="#FCEDEC" stroke="#C0392B" stroke-width="1.5"/>
+  <text x="200" y="872" font-size="12.5" font-weight="bold" fill="#922B21" text-anchor="middle">输出「信息不足」</text>
+  <text x="200" y="890" font-size="12" fill="#922B21" text-anchor="middle">列出待补充项</text>
+
+  <!-- R9 ⑤ 报告渲染 -->
+  <rect x="635" y="957" width="210" height="56" fill="#EAF2FA" stroke="#1F4E79" stroke-width="1.6"/>
+  <text x="740" y="980" font-size="13" font-weight="bold" fill="#1F3864" text-anchor="middle">⑤ 报告渲染</text>
+  <text x="740" y="999" font-size="12.5" fill="#1F3864" text-anchor="middle">生成独立 HTML 报告页</text>
+
+  <!-- R10 ⑥ 汇总输出 -->
+  <rect x="355" y="1057" width="230" height="56" fill="#FFFFFF" stroke="#1F4E79" stroke-width="1.6"/>
+  <text x="470" y="1080" font-size="13" font-weight="bold" fill="#1F3864" text-anchor="middle">⑥ 汇总输出</text>
+  <text x="470" y="1099" font-size="12.5" fill="#1F3864" text-anchor="middle">风险等级 + 报告链接</text>
+
+  <!-- R11 ⑦ 终点 -->
+  <rect x="100" y="1057" width="200" height="56" rx="26" fill="#E7EEF6" stroke="#1F4E79" stroke-width="2"/>
+  <text x="200" y="1080" font-size="13" font-weight="bold" fill="#1F3864" text-anchor="middle">⑦ 查看结论与报告</text>
+  <text x="200" y="1099" font-size="12.5" fill="#1F3864" text-anchor="middle">按建议现场核查</text>
+
+  <!-- ── 连线 ───────────────────────────────────────────────── -->
+  <g fill="none" stroke="#1F4E79" stroke-width="1.8" marker-end="url(#ah)">
+    <path d="M 200 173 L 200 245 L 353 245"/>
+    <path d="M 470 273 L 470 310"/>
+    <path d="M 470 388 L 470 462 L 633 462"/>
+    <path d="M 740 496 L 740 544"/>
+    <path d="M 740 598 L 740 672 L 587 672"/>
+    <path d="M 470 700 L 470 722 L 987 722 L 987 742"/>
+    <path d="M 987 800 L 987 877 L 567 877"/>
+    <path d="M 470 915 L 470 985 L 633 985"/>
+    <path d="M 740 1013 L 740 1085 L 587 1085"/>
+    <path d="M 355 1085 L 302 1085"/>
+  </g>
+
+  <!-- 否分支（退回） -->
+  <g fill="none" stroke="#C0392B" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ahr)">
+    <path d="M 375 350 L 302 350"/>
+    <path d="M 375 877 L 302 877"/>
+    <path d="M 100 350 L 46 350 L 46 138 L 98 138"/>
+    <path d="M 100 877 L 30 877 L 30 152 L 98 152"/>
+  </g>
+
+  <!-- 分支标签 -->
+  <rect x="478" y="396" width="26" height="17" fill="#FFFFFF"/>
+  <text x="491" y="409" font-size="12" font-weight="bold" fill="#1F4E79" text-anchor="middle">是</text>
+  <rect x="326" y="332" width="26" height="17" fill="#FFFFFF"/>
+  <text x="339" y="345" font-size="12" font-weight="bold" fill="#C0392B" text-anchor="middle">否</text>
+
+  <rect x="478" y="923" width="26" height="17" fill="#FFFFFF"/>
+  <text x="491" y="936" font-size="12" font-weight="bold" fill="#1F4E79" text-anchor="middle">是</text>
+  <rect x="326" y="859" width="26" height="17" fill="#FFFFFF"/>
+  <text x="339" y="872" font-size="12" font-weight="bold" fill="#C0392B" text-anchor="middle">否</text>
+
+  <!-- ── 脚注 ───────────────────────────────────────────────── -->
+  <line x1="70" y1="1160" x2="1104" y2="1160" stroke="#C9D6E4" stroke-width="1"/>
+  <text x="70" y="1178" font-size="11.5" fill="#5A6B7C">说明：火焰轮廓、相对热度分布与量化指标均由图像分析服务以确定性算法计算；视觉大模型仅在「图像 + 量化指标」基础上研判，不参与像素级计算，亦不输出绝对温度。</text>
+
+</svg>

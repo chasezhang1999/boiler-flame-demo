@@ -1,0 +1,20 @@
+services:
+  flame:
+    build: .
+    image: flame-cv:latest
+    container_name: flame-cv
+    restart: unless-stopped
+    ports:
+      # 只绑本地，对外走 1Panel openresty 反代
+      - "127.0.0.1:18800:8000"
+    env_file: .env          # BASE_URL / DIFY_* / LLM_*，不进 git
+    volumes:
+      - ./static:/app/static   # 生成的图片和报告页
+      - ./data:/app/data       # 台账 SQLite，必须持久化
+    networks: [default, dify]
+
+networks:
+  dify:
+    # Dify 的 compose 网络，用于内网直连它的 nginx，不绕公网
+    external: true
+    name: docker_default

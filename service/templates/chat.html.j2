@@ -1,0 +1,119 @@
+{% extends "base.html.j2" %}
+{% set page = "chat" %}
+{% block title %}历史问答 · 锅炉运行分析助手{% endblock %}
+
+{% block body %}
+<div class="card">
+  <div class="row">
+    <div style="flex:2">
+      <label for="site">限定机组（可不选，问题里点名也能识别）</label>
+      <select id="site">
+        <option value="">不限定</option>
+        {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="days">时间范围</label>
+      <select id="days">
+        <option value="7">最近 7 天</option>
+        <option value="30" selected>最近 30 天</option>
+        <option value="90">最近 90 天</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div id="log"></div>
+
+<div class="card">
+  <textarea id="q" rows="2" placeholder="例如：3号机组最近结焦风险怎么样？哪台机组高风险最多？"></textarea>
+  <div class="row" style="margin-top:10px">
+    <button id="send" style="flex:2">发送</button>
+    <button id="clear" class="ghost">清空</button>
+  </div>
+  <div class="muted" style="margin-top:10px">
+    只依据台账里的历史记录回答，不会编造数据。台账为空时会如实说明。
+  </div>
+  <div id="err" class="err" hidden></div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+const $ = s => document.querySelector(s);
+
+const SUGGEST = [
+  '哪台机组高风险最多？',
+  '3号机组最近结焦风险怎么样？',
+  '最近一次高风险是什么时候，什么原因？',
+];
+
+function bubble(who, html){
+  const d = document.createElement('div');
+  d.className = 'card';
+  d.style.borderLeft = '3px solid ' + (who==='我' ? 'var(--line)' : 'var(--accent)');
+  d.innerHTML = '<div class="muted" style="margin-bottom:6px">' + who + '</div>' +
+                '<div class="md">' + html + '</div>';
+  $('#log').appendChild(d);
+  d.scrollIntoView({behavior:'smooth', block:'nearest'});
+  return d;
+}
+
+function suggestions(){
+  if($('#log').children.length) return;
+  const d = document.createElement('div');
+  d.className = 'card';
+  d.innerHTML = '<div class="muted" style="margin-bottom:8px">试试这些问题</div>' +
+    SUGGEST.map(s => '<button class="ghost sug" style="margin:0 8px 8px 0;flex:none;' +
+      'font-size:14px;padding:8px 12px">' + esc(s) + '</button>').join('');
+  $('#log').appendChild(d);
+  d.querySelectorAll('.sug').forEach(b => b.onclick = () => {
+    $('#q').value = b.textContent; send();
+  });
+}
+
+async function send(){
+  const question = $('#q').value.trim();
+  if(!question) return;
+  $('#err').hidden = true;
+  $('#log').querySelectorAll('.card').forEach(c => {
+    if(c.querySelector('.sug')) c.remove();       // 提过问就把建议撤掉
+  });
+
+  bubble('我', '<p>' + esc(question) + '</p>');
+  $('#q').value = '';
+  const btn = $('#send');
+  btn.disabled = true;
+  const holder = bubble('助手', '<p class="muted"><span class="spin" ' +
+    'style="border-color:var(--accent);border-top-color:transparent"></span>查台账中…</p>');
+
+  try{
+    const r = await fetch('/api/chat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({question, site:$('#site').value, days:+$('#days').value}),
+    });
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.detail || ('HTTP ' + r.status));
+    let html = md2html(j.answer || '（没有返回内容）');
+    if(j.chart_url){
+      html += '<img src="' + esc(j.chart_url) + '" alt="趋势图">' +
+              '<em>' + esc(j.site_label) + ' · 最近 ' + j.days + ' 天相对亮温 P95</em>';
+    }
+    holder.querySelector('.md').innerHTML = html;
+  }catch(e){
+    holder.remove();
+    $('#err').textContent = '出错了：' + e.message;
+    $('#err').hidden = false;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+$('#send').onclick = send;
+$('#clear').onclick = () => { $('#log').innerHTML=''; suggestions(); };
+$('#q').addEventListener('keydown', e => {
+  if(e.key==='Enter' && (e.metaKey||e.ctrlKey)) send();
+});
+suggestions();
+</script>
+{% endblock %}

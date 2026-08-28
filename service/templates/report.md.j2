@@ -1,0 +1,110 @@
+{#-
+  工作流回给用户的 markdown 正文。
+  版式跟 HTML 报告页对齐：结论一行说完 → 超限项 → 现象/判据/建议 → 关键指标 → 图。
+  markdown 没有颜色，所以方向用 ↑（高于参考区间）/ ↓（低于）表示，超限项加粗。
+
+  改这个文件不用动 Python，容器重启即生效。
+  可用变量见 report.py 的 build_context()。
+-#}
+{% if report_url -%}
+> 📄 **[查看完整评估报告]({{ report_url }})** — 含分析图、全部量化指标与判据明细
+
+{% endif -%}
+
+# {{ badge }}{% if score is not none %}　{{ score }}/100{% endif %}
+{% if headline %}
+**{{ headline }}**
+{% endif %}
+{%- if meta %}
+
+{{ meta }}
+{%- endif %}
+
+{%- if abnormal %}
+
+{# 每项单独一行：引用块里连续的行会被合成一段，所以要套一层列表 #}
+> **{{ abnormal_count }} 项指标超出参考区间**{% if hotspots %}，检出 {{ hotspots|length }} 处贴壁亮斑{% endif %}：
+>
+{% for m in abnormal[:4] %}> - {{ m.label }} {{ m.value }}{{ m.unit }} {{ m.arrow }}（参考 {{ m.range_text }}）
+{% endfor %}
+{%- if abnormal_count > 4 %}> - …另有 {{ abnormal_count - 4 }} 项，见完整报告
+{% endif %}
+{%- elif not abnormal and metrics %}
+
+> 各项指标均在参考区间内{% if not hotspots %}，未检出贴壁亮斑{% endif %}。
+{%- endif %}
+
+{%- if not parsed %}
+
+> 模型未按 JSON 返回，以下为原文
+
+```
+{{ raw_text }}
+```
+{%- else %}
+{%- if visual %}
+
+## 图像观察
+*仅来自照片*
+
+{% for x in visual %}- {{ x }}
+{% endfor %}
+{%- endif %}
+{%- if metric %}
+
+## 指标发现
+*仅来自量化指标*
+
+{% for x in metric %}- {{ x }}
+{% endfor %}
+{%- endif %}
+{%- if reasons %}
+
+## 判据
+
+{% for x in reasons %}- {{ x }}
+{% endfor %}
+{%- endif %}
+{%- if suggestions %}
+
+## 运行调整建议
+
+{% for x in suggestions %}{{ loop.index }}. {{ x }}
+{% endfor %}
+{%- endif %}
+{%- endif %}
+{%- if md_metrics %}
+
+## 关键指标
+
+`▬`＝参考区间，`▮`＝本次读数，`↑ ↓`＝高于／低于参考区间
+
+| 指标 | 量程分布 | 读数 | 参考 | 状态 |
+| --- | --- | ---: | :---: | :--- |
+{% for m in md_metrics %}| {{ m.label }} | {% if m.spark %}`{{ m.spark }}`{% else %}—{% endif %} | {% if m.abnormal %}**{{ m.value }}{{ m.unit }}**{% else %}{{ m.value }}{{ m.unit }}{% endif %} | {{ m.range_text }} | {% if m.abnormal %}**{{ m.state }} {{ m.arrow }}**{% else %}{{ m.state }}{% endif %} |
+{% endfor %}
+{%- endif %}
+{%- if hotspots %}
+
+## 疑似贴壁亮斑
+
+| 位置 | 面积占比 % | 相对亮温 |
+| --- | ---: | ---: |
+{% for s in hotspots %}| {{ s.pos }} | {{ s.area }} | {{ s.temp }} |
+{% endfor %}
+{%- endif %}
+{%- if contour_url or heatmap_url %}
+
+## 分析图
+
+{% if contour_url %}![火焰等值轮廓]({{ contour_url }})
+*红十字＝形心，品红框＝疑似贴壁亮斑*
+
+{% endif %}
+{%- if heatmap_url %}![相对亮温分布]({{ heatmap_url }})
+*越亮越热，未标定*
+{% endif %}
+{%- endif %}
+
+---
+*热力图为基于可见光推算的未标定相对亮温，不代表实际温度；参考区间为 demo 期经验值，未经历史样本标定。本结果仅作辅助分析，不替代专业人员判断和操作规程。*

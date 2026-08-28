@@ -1,0 +1,380 @@
+app:
+  description: 拍一张炉膛火焰照片，输出火焰轮廓图、相对亮温热力图和结焦风险判级报告。
+  icon: 🔥
+  icon_background: '#FFEAD5'
+  mode: workflow
+  name: 锅炉火焰结焦风险分析
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+  graph:
+    edges:
+    - data: {isInIteration: false, isInLoop: false, sourceType: start, targetType: http-request}
+      id: e1
+      source: start_node
+      sourceHandle: source
+      target: http_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: http-request, targetType: code}
+      id: e2
+      source: http_node
+      sourceHandle: source
+      target: parse_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: code, targetType: llm}
+      id: e3
+      source: parse_node
+      sourceHandle: source
+      target: llm_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: llm, targetType: http-request}
+      id: e4
+      source: llm_node
+      sourceHandle: source
+      target: report_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: http-request, targetType: code}
+      id: e5
+      source: report_node
+      sourceHandle: source
+      target: finish_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: code, targetType: end}
+      id: e6
+      source: finish_node
+      sourceHandle: source
+      target: end_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+
+    # ---------------------------------------------------------- 1. 上传照片
+    - data:
+        desc: 上传一张炉膛火焰照片
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - variable: photo
+          label: 火焰照片
+          type: file
+          required: true
+          max_length: null
+          options: []
+          allowed_file_types: [image]
+          allowed_file_extensions: []
+          allowed_file_upload_methods: [local_file, remote_url]
+        - variable: site
+          label: 机组 / 位置（选填）
+          type: text-input
+          required: false
+          max_length: 48
+          options: []
+      height: 142
+      id: start_node
+      position: {x: 30, y: 260}
+      positionAbsolute: {x: 30, y: 260}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    # ---------------------------------------------------------- 2. CV 图像分析
+    - data:
+        desc: 调自建 OpenCV 服务，出轮廓图、热力图和量化指标
+        selected: false
+        title: CV 图像分析
+        type: http-request
+        method: post
+        url: https://flame.518521.xyz/analyze
+        authorization:
+          type: no-auth
+          config: null
+        headers: ''
+        params: ''
+        body:
+          type: form-data
+          data:
+          - key: file
+            type: file
+            value: ''
+            file: [start_node, photo]
+        timeout: {connect: 10, read: 60, write: 60}
+        retry_config:
+          enabled: true
+          max_retries: 2
+          retry_interval: 1000
+          exponential_backoff: {enabled: false, multiplier: 2, max_interval: 10000}
+      height: 132
+      id: http_node
+      position: {x: 340, y: 260}
+      positionAbsolute: {x: 340, y: 260}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    # ---------------------------------------------------------- 3. 解析 CV 结果
+    - data:
+        desc: 把 JSON 拆成给模型看的指标文本和两张图的地址
+        selected: false
+        title: 解析 CV 结果
+        type: code
+        code_language: python3
+        variables:
+        - variable: body
+          value_selector: [http_node, body]
+        outputs:
+          metrics_text: {type: string, children: null}
+          contour_url: {type: string, children: null}
+          heatmap_url: {type: string, children: null}
+        dependencies: []
+        code: |
+          import json
+
+          def main(body: str) -> dict:
+              d = json.loads(body)
+              m = d.get("metrics", {})
+              return {
+                  "metrics_text": json.dumps(m, ensure_ascii=False, indent=2),
+                  "contour_url": d.get("contour_url", ""),
+                  "heatmap_url": d.get("heatmap_url", ""),
+              }
+      height: 54
+      id: parse_node
+      position: {x: 650, y: 260}
+      positionAbsolute: {x: 650, y: 260}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    # ---------------------------------------------------------- 4. 结焦风险判级
+    - data:
+        desc: deepseek-v4-flash-vision-exp，看原图 + CV 指标给出风险等级
+        selected: false
+        title: 结焦风险判级
+        type: llm
+        model:
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+          name: deepseek-v4-flash-vision-exp
+          mode: chat
+          completion_params: {temperature: 0.3}
+        prompt_template:
+        - role: system
+          text: |
+            你是电站锅炉燃烧监督工程师。根据炉膛火焰照片和图像分析指标，判断结焦（挂焦、
+            积灰、贴壁燃烧）风险。
+
+            可参考的判据：
+            - 火焰中心明显偏斜、贴近水冷壁 → 局部热负荷过高，结焦风险上升
+            - 火焰整体偏白亮、高温区占比大 → 炉温偏高，灰熔点被突破的可能性增加
+            - 火焰边界破碎、圆度低、有大片暗黑区 → 燃烧不稳或未燃尽，飞灰易沉积
+            - 主火焰之外出现贴壁高温亮斑 → 疑似贴壁火焰或已有挂焦发亮，这一项权重最高
+
+            只输出 JSON，不要任何其他文字，不要用 markdown 代码块包裹：
+            {
+              "risk_level": "高 或 中 或 低",
+              "score": 0到100的整数,
+              "findings": ["观察到的现象，3-5 条"],
+              "reasons": ["支撑该等级的理由，2-3 条，要引用具体指标数值"],
+              "suggestions": ["运行调整建议，2-3 条"]
+            }
+        - role: user
+          text: |
+            这是炉膛火焰照片。图像分析程序算出的量化指标如下：
+
+            {{#parse_node.metrics_text#}}
+
+            指标说明：
+            - flame_fill_ratio_pct 火焰充满度（占画面百分比）
+            - centroid_offset_x/y_pct 火焰中心相对画面中心的偏移，负值分别表示偏左、偏上
+            - centroid_offset_total_pct 偏斜总量，越大越偏
+            - temp_index_mean / p95 相对亮温 0~1，未标定，不是摄氏度
+            - high_temp_area_pct 高温区占火焰面积比
+            - contour_circularity 火焰轮廓圆度，1 为正圆，越小越破碎或拉长
+            - hot_pixels_near_edge_pct 落在画面边缘带的高温像素占比
+            - wall_hotspots 主火焰之外、贴近画面边缘的独立高亮块，疑似贴壁燃烧或挂焦
+              发亮，带位置（上/中/下 + 左/中/右）、面积占比和相对亮温
+
+            请结合照片和这些指标给出结焦风险判级。
+        prompt_config:
+          jinja2_variables: []
+        memory: null
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: true
+          configs:
+            variable_selector: [start_node, photo]
+            detail: high
+        structured_output: {enabled: false}
+        retry_config:
+          enabled: true
+          max_retries: 1
+          retry_interval: 1000
+          exponential_backoff: {enabled: false, multiplier: 2, max_interval: 10000}
+      height: 98
+      id: llm_node
+      position: {x: 960, y: 260}
+      positionAbsolute: {x: 960, y: 260}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    # ---------------------------------------------------------- 5. 渲染报告
+    - data:
+        desc: 把判级和指标交给 CV 服务，渲染成独立的 HTML 报告页
+        selected: false
+        title: 渲染报告
+        type: http-request
+        method: post
+        url: https://flame.518521.xyz/report
+        authorization:
+          type: no-auth
+          config: null
+        headers: ''
+        params: ''
+        body:
+          # 用 form-data 不用 JSON：模型输出里带换行和引号，
+          # 塞进 Dify 的 JSON body 模板会把请求体撑坏，表单字段没这个问题
+          type: form-data
+          data:
+          - {key: assessment_text, type: text, value: '{{#llm_node.text#}}', file: []}
+          - {key: metrics_json, type: text, value: '{{#parse_node.metrics_text#}}', file: []}
+          - {key: contour_url, type: text, value: '{{#parse_node.contour_url#}}', file: []}
+          - {key: heatmap_url, type: text, value: '{{#parse_node.heatmap_url#}}', file: []}
+          - {key: site, type: text, value: '{{#start_node.site#}}', file: []}
+        timeout: {connect: 10, read: 30, write: 30}
+        retry_config:
+          enabled: true
+          max_retries: 2
+          retry_interval: 1000
+          exponential_backoff: {enabled: false, multiplier: 2, max_interval: 10000}
+      height: 132
+      id: report_node
+      position: {x: 1270, y: 260}
+      positionAbsolute: {x: 1270, y: 260}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    # ---------------------------------------------------------- 6. 汇总输出
+    - data:
+        desc: 取出报告地址，并给运行面板一份简报
+        selected: false
+        title: 汇总输出
+        type: code
+        code_language: python3
+        variables:
+        - variable: resp
+          value_selector: [report_node, body]
+        - variable: contour_url
+          value_selector: [parse_node, contour_url]
+        - variable: heatmap_url
+          value_selector: [parse_node, heatmap_url]
+        outputs:
+          report_url: {type: string, children: null}
+          risk_level: {type: string, children: null}
+          summary: {type: string, children: null}
+        dependencies: []
+        code: |
+          import json
+
+          BADGE = {"高": "🔴 高风险", "中": "🟠 中风险", "低": "🟢 低风险"}
+
+          def main(resp: str, contour_url: str, heatmap_url: str) -> dict:
+              try:
+                  d = json.loads(resp)
+              except Exception:
+                  d = {}
+              url = d.get("report_url", "")
+              level = d.get("risk_level", "未知")
+
+              lines = ["## " + BADGE.get(level, "⚪ 判级未知")]
+              if url:
+                  lines.append("**[→ 打开完整评估报告](%s)**" % url)
+              else:
+                  lines.append("> 报告渲染失败，以下仅为图像分析结果")
+              lines.append("### 火焰轮廓")
+              lines.append("![轮廓](%s)" % contour_url)
+              lines.append("### 相对亮温分布")
+              lines.append("![热力图](%s)" % heatmap_url)
+
+              sep = chr(10) * 2
+              return {"report_url": url, "risk_level": level,
+                      "summary": sep.join(lines)}
+      height: 54
+      id: finish_node
+      position: {x: 1580, y: 260}
+      positionAbsolute: {x: 1580, y: 260}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    # ---------------------------------------------------------- 6. 结束
+    - data:
+        desc: ''
+        selected: false
+        title: 结束
+        type: end
+        outputs:
+        - variable: summary
+          value_type: string
+          value_selector: [finish_node, summary]
+        - variable: report_url
+          value_type: string
+          value_selector: [finish_node, report_url]
+        - variable: risk_level
+          value_type: string
+          value_selector: [finish_node, risk_level]
+      height: 142
+      id: end_node
+      position: {x: 1890, y: 260}
+      positionAbsolute: {x: 1890, y: 260}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport: {x: 0, y: 0, zoom: 0.7}
