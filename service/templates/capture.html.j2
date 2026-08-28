@@ -5,8 +5,8 @@
 {% block head %}
 <style>
   .cap{display:grid;grid-template-columns:minmax(0,1fr) 440px;align-items:stretch;min-height:calc(100vh - 51px)}
-  .console{padding:34px 40px;display:flex;flex-direction:column;gap:20px;border-right:1px solid var(--line)}
-  .phonepane{padding:34px 40px;display:flex;justify-content:center;background:var(--tint)}
+  .console{order:1;padding:34px 40px;display:flex;flex-direction:column;gap:20px;border-right:1px solid var(--line)}
+  .phonepane{order:2;padding:34px 40px;display:flex;justify-content:center;background:var(--tint)}
   .phone{width:324px}
   .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
   .viewport{position:relative;aspect-ratio:3/4;border:1px solid var(--line);overflow:hidden;
@@ -39,8 +39,8 @@
                  padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
   @media(max-width:900px){
     .cap{grid-template-columns:1fr}
-    .console{order:2;border-right:0;border-top:1px solid var(--line);padding:24px 16px}
-    .phonepane{order:1;padding:16px;background:transparent}
+    .console{order:0;border-right:0;border-top:1px solid var(--line);padding:24px 16px}
+    .phonepane{order:0;padding:16px;background:transparent}
     .phone{width:100%;max-width:420px}
   }
 </style>
@@ -48,38 +48,6 @@
 
 {% block body %}
 <div class="cap">
-
-  <div class="console">
-    <div>
-      <div class="kicker">Step 01 — 现场取像</div>
-      <h2 style="font-size:30px;margin:6px 0 0">拍一张看火孔照片</h2>
-      <div style="font-size:14px;color:var(--n700);max-width:52ch;text-wrap:pretty;margin-top:6px">
-        对着看火孔正拍，尽量拍满火焰、不要逆着火焰角度。约 20 秒出结论，结果自动进台账。
-      </div>
-    </div>
-
-    <div class="bp" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
-      <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
-      <div class="eyebrow">机组 / 位置 — 台账按它归档</div>
-      <div>
-        <label for="site">机组 / 位置</label>
-        <select id="site">
-          <option value="">请选择…</option>
-          {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <div class="bp" style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
-      <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
-      <div class="eyebrow">最近在这个机位</div>
-      <div class="rowlist" id="recent"><div class="muted">选择机位后显示。</div></div>
-    </div>
-
-    <div style="font-size:12px;color:var(--n600);text-wrap:pretty;max-width:60ch">
-      热力图为可见光推算的<b>未标定相对亮温</b>，不代表实际温度；参考区间为经验值；风险判级由模型推断，不作为运行调整依据。
-    </div>
-  </div>
 
   <div class="phonepane">
     <div class="phone">
@@ -131,6 +99,38 @@
       <div id="summary" class="md bp" hidden style="margin-top:18px;padding:16px 18px">
         <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
       </div>
+    </div>
+  </div>
+
+  <div class="console">
+    <div>
+      <div class="kicker">Step 01 — 现场取像</div>
+      <h2 style="font-size:30px;margin:6px 0 0">拍一张看火孔照片</h2>
+      <div style="font-size:14px;color:var(--n700);max-width:52ch;text-wrap:pretty;margin-top:6px">
+        对着看火孔正拍，尽量拍满火焰、不要逆着火焰角度。约 20 秒出结论，结果自动进台账。
+      </div>
+    </div>
+
+    <div class="bp" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+      <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+      <div class="eyebrow">机组 / 位置 — 台账按它归档</div>
+      <div>
+        <label for="site">机组 / 位置</label>
+        <select id="site">
+          <option value="">请选择…</option>
+          {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="bp" style="padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+      <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+      <div class="eyebrow">最近在这个机位</div>
+      <div class="rowlist" id="recent"><div class="muted">选择机位后显示。</div></div>
+    </div>
+
+    <div style="font-size:12px;color:var(--n600);text-wrap:pretty;max-width:60ch">
+      热力图为可见光推算的<b>未标定相对亮温</b>，不代表实际温度；参考区间为经验值；风险判级由模型推断，不作为运行调整依据。
     </div>
   </div>
 

@@ -430,16 +430,31 @@ def health():
 
 # ---------------------------------------------------------------- 页面
 
+def _page(name: str, **kw) -> HTMLResponse:
+    """
+    渲染页面并禁止缓存。
+
+    页面是服务端渲染的 HTML，没有版本号可带；手机浏览器（尤其 iOS Safari）
+    会按启发式缓存它，改完版式在手机上刷不出来，看着像「没适配移动端」。
+    静态资源仍走正常缓存，只有这三个 HTML 入口不缓存。
+    """
+    html = _pages.get_template(name).render(**kw)
+    return HTMLResponse(html, headers={
+        "Cache-Control": "no-store, must-revalidate",
+        "Pragma": "no-cache",
+    })
+
+
 @app.get("/", response_class=HTMLResponse)
 def page_capture():
-    return _pages.get_template("capture.html.j2").render(sites=sites.SITES)
+    return _page("capture.html.j2", sites=sites.SITES)
 
 
 @app.get("/history", response_class=HTMLResponse)
 def page_history():
-    return _pages.get_template("history.html.j2").render(sites=sites.SITES, units=sites.UNITS)
+    return _page("history.html.j2", sites=sites.SITES, units=sites.UNITS)
 
 
 @app.get("/chat", response_class=HTMLResponse)
 def page_chat():
-    return _pages.get_template("chat.html.j2").render(sites=sites.SITES, units=sites.UNITS)
+    return _page("chat.html.j2", sites=sites.SITES, units=sites.UNITS)
