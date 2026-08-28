@@ -11,7 +11,7 @@
 | 图像分析 | 火焰分割、三级等值轮廓、相对亮温伪彩、11 项量化指标 |
 | 风险判级 | 视觉模型结合图像与指标，给出高/中/低、判据和核查建议 |
 | 历史台账 | 按机组和时间查记录、看趋势图、导出 CSV |
-| 历史问答 | 「哪台机组高风险最多」这类问题，依据台账作答 |
+| 智能问答 | 「哪台机组高风险最多」这类问题，依据台账作答 |
 
 ## 边界
 
@@ -25,7 +25,7 @@
 ## 架构
 
 ```
-浏览器（拍照分析 / 历史台账 / 历史问答）
+浏览器（拍照分析 / 历史台账 / 智能问答）
      │  只跟后端说话——Dify 和模型的 key 不能落到前端
      ▼
 后端 (FastAPI)
@@ -232,6 +232,7 @@ docker exec flame-cv python tools/seed_ledger.py --days 45 --per-day 3
 | Dify 起不来，端口冲突 | 80/443 被占，见第 1 步改端口 |
 | HTTP 节点报 `blocked by SSRF protection` | Dify 默认禁止访问私有 IP，节点地址要填公网域名，不能填容器名 |
 | 前端报 `Unexpected token '<'` | 后端出错时反代返回的是 HTML 错误页。真实原因看后端日志或直连 `127.0.0.1:18800` |
+| 问答筛了机组仍按全量作答 | chatflow 只收得到 `sys.query` 和 `days`，机位要写进 query 前缀让后端 `resolve()` 认；且 `resolve()` 必须能从整句里认出机位 |
 
 ---
 
@@ -249,7 +250,7 @@ service/          后端
   assets/fonts/   自托管字体
 dify/
   workflow.yml    分析工作流 DSL（含火焰照片校验分支）
-  chat.yml        历史问答 chatflow DSL
+  chat.yml        智能问答 chatflow DSL
   prompts/        提示词，独立成文件便于评审
 tools/
   import_photos.py 把真实照片批量补录进台账（真 CV + 真判级）

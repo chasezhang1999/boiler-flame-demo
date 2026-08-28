@@ -359,11 +359,22 @@ async def api_chat(payload: dict):
     site_id, site_label = data["_site_id"], data["_site_label"]
 
     if DIFY_CHAT_KEY and DIFY_BASE:
+        # 页面上选的机组必须一起送进去。chatflow 的 HTTP 节点回调
+        # /api/ledger_bundle 时只带得上 sys.query 和 days，所以把机位写进
+        # query 前缀，让后端的 sites.resolve() 从文本里认出来。
+        #
+        # 不走 inputs 传是因为开始节点只声明了 days，多塞一个键 Dify 会拒；
+        # 要走 inputs 得改 DSL 并重新导入，前缀这条路不依赖 DSL 版本。
+        # 顺带模型也看得见这个限定，回答不会跑题到别的机组。
+        q = question
+        if site_id and site_label not in question:
+            q = "（仅限 %s）%s" % (site_label, question)
+
         async with httpx.AsyncClient(timeout=120) as c:
             r = await c.post(
                 "%s/chat-messages" % DIFY_BASE,
                 headers={"Authorization": "Bearer %s" % DIFY_CHAT_KEY},
-                json={"inputs": {"days": days}, "query": question,
+                json={"inputs": {"days": days}, "query": q,
                       "response_mode": "blocking", "user": "web"},
             )
         if r.status_code >= 300:

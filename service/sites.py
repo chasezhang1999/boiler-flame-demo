@@ -38,11 +38,25 @@ LABELS = [s["label"] for s in SITES]
 BY_LABEL = {s["label"]: s for s in SITES}
 
 
+def _aliases(s):
+    """一个机位的几种叫法。用户很少写全「B层燃烧器」，多半只说「B层」。"""
+    u = s["unit"].replace(" ", "")
+    sp = s["spot"].replace(" ", "")
+    out = {u + sp}
+    if sp.endswith("燃烧器"):
+        out.add(u + sp[:-3])          # 3号机组B层
+    return out
+
+
 def resolve(value: str):
     """
-    把各种写法归一到一条 site 记录：id、完整 label、或者用户随口说的
-    「3号机组B层」这类片段。匹配不上返回 None，调用方自己决定怎么办 ——
-    不要瞎猜，猜错了台账就串号了。
+    把各种写法归一到一条 site 记录：id、完整 label、片段（「3号机组B层」），
+    以及**整句话里点名了某个机位**的情况（「3号机组B层最近怎么样？」）。
+
+    最后这种以前是认不出来的：原来只判「查询是不是机位名的一部分」，
+    方向反了 —— 句子总比机位名长，于是永远匹配不上，问答就悄悄退回全量台账。
+
+    匹配不上返回 None，调用方自己决定怎么办 —— 不要瞎猜，猜错了台账就串号了。
     """
     if not value:
         return None
@@ -52,13 +66,23 @@ def resolve(value: str):
     if v in BY_LABEL:
         return BY_LABEL[v]
 
-    # 去掉分隔符和空格后做包含匹配，"3号机组B层" 能命中 "3号机组 · B层燃烧器"
     flat = v.replace(" ", "").replace("·", "").replace("-", "").upper()
-    hits = []
+    if not flat:
+        return None
+
+    # 整句里点名机位：取最长命中，避免「3号机组B层」被「3号机组」抢先
+    best = None
     for s in SITES:
-        key = (s["unit"] + s["spot"]).replace(" ", "").upper()
-        if flat and (flat in key or key.startswith(flat)):
-            hits.append(s)
+        for a in _aliases(s):
+            key = a.upper()
+            if key in flat and (best is None or len(key) > len(best[0])):
+                best = (key, s)
+    if best:
+        return best[1]
+
+    # 用户只输了片段（「3号机组B」），反过来按前缀找，必须唯一才算数
+    hits = [s for s in SITES
+            if any(a.upper().startswith(flat) for a in _aliases(s))]
     return hits[0] if len(hits) == 1 else None
 
 

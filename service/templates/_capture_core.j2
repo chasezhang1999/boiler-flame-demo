@@ -1,0 +1,162 @@
+{# 拍照分析的共用逻辑。手机版和网页版版式不同，但元素 id 一致，脚本只此一份。
+   引用它的页面必须提供：#site #cam #pick #preview #vp-empty #vp-site #vp-state
+   #stages(.st + #bar) #act-idle #act-preview #act-busy(#remain) #result #verdict
+   #btn-report #archived #err #summary #recent #btn-go #btn-reset
+   可选：#btn-shot #btn-pick #drop #}
+<script>
+const SITES = {{ sites|tojson }};
+
+let file = null, timer = null, t0 = 0;
+
+function siteId(){ return $('#site').value; }
+function siteLabel(){
+  const s = SITES.find(x => x.id === siteId());
+  return s ? s.label : '未选择机位';
+}
+function showErr(m){ const e = $('#err'); e.textContent = m || ''; e.hidden = !m; }
+
+function onSite(){
+  const el = $('#vp-site');
+  if(el) el.textContent = siteLabel();
+  loadRecent();
+}
+
+async function loadRecent(){
+  const box = $('#recent');
+  if(!box) return;
+  const id = siteId();
+  if(!id){ box.innerHTML = '<div class="muted">选择机位后显示。</div>'; return; }
+  box.innerHTML = '<div class="muted">加载中…</div>';
+  try{
+    const j = await api('/api/history?' + new URLSearchParams({site:id, days:0, limit:3}));
+    if(!j.rows.length){ box.innerHTML = '<div class="muted">这个机位还没有记录。</div>'; return; }
+    box.innerHTML = j.rows.map(r =>
+      '<div class="r"><span class="tnum" style="color:var(--n700)">' + esc(r.ts.slice(5,16)) + '</span>' +
+      '<span><span class="lv ' + esc(r.risk_level||'未知') + '">' + esc(r.risk_level||'未知') + '</span></span>' +
+      '<span class="t">' + esc(r.headline||'—') + '</span>' +
+      (r.report_url ? '<a href="' + esc(r.report_url) + '" target="_blank" style="font-size:12px">报告</a>'
+                    : '<span class="muted">—</span>') +
+      '</div>').join('');
+  }catch(e){ box.innerHTML = '<div class="muted">读取失败：' + esc(e.message) + '</div>'; }
+}
+
+function setPhase(p){
+  $('#act-idle').hidden    = p !== 'idle';
+  $('#act-preview').hidden = p !== 'preview';
+  $('#act-busy').hidden    = p !== 'busy';
+  $('#result').hidden      = p !== 'done';
+  $('#stages').hidden      = p !== 'busy';
+  const st = $('#vp-state');
+  if(st) st.textContent = {idle:'待取像', preview:'已取像', busy:'分析中', done:'已归档'}[p];
+}
+
+function onPicked(f){
+  if(!f) return;
+  file = f;
+  const img = $('#preview');
+  img.src = URL.createObjectURL(f);
+  img.hidden = false;
+  $('#vp-empty').hidden = true;
+  $('#summary').hidden = true;
+  showErr('');
+  setPhase('preview');
+}
+
+// 进度是按经验耗时推进的估计值，不是后端回调——一次 blocking 调用拿不到中间态，
+// 但等待期完全没反馈更糟。四段合计约 20 秒，跑完停在最后一段等真结果。
+function startStages(){
+  t0 = Date.now();
+  const marks = [2, 8, 16, 20];
+  $$('#stages .st').forEach(el => { el.className = 'st'; el.lastElementChild.textContent = '待执行'; });
+  timer = setInterval(() => {
+    const el = (Date.now() - t0) / 1000;
+    $('#remain').textContent = Math.max(1, Math.round(20 - el));
+    let cur = marks.findIndex(m => el < m);
+    if(cur === -1) cur = 3;
+    $$('#stages .st').forEach((n, i) => {
+      n.className = 'st' + (i < cur ? ' done' : i === cur ? ' on' : '');
+      n.lastElementChild.textContent = i < cur ? marks[i] + 's' : i === cur ? '进行中' : '待执行';
+    });
+    $('#bar').style.width = Math.min(96, 8 + el / 20 * 88) + '%';
+  }, 300);
+}
+function stopStages(){ clearInterval(timer); timer = null; }
+
+function showResult(j){
+  const lv = j.risk_level || '未知';
+  $('#verdict').innerHTML =
+    '<div class="top">' +
+      '<div class="badge ' + esc(lv) + '" style="background:' +
+        ({'高':'var(--hi)','中':'var(--mid)','低':'var(--lo)'}[lv] || 'var(--n600)') + '">' + esc(lv) + '风险</div>' +
+      '<div class="mid"><div style="font-family:var(--h);font-size:17px;line-height:1.15">' +
+        esc(siteLabel()) + '</div>' +
+      '<div style="font-size:11px;color:var(--n600);margin-top:2px" class="tnum">' +
+        new Date().toLocaleString('zh-CN', {hour12:false}).slice(0,16) +
+        ' · 用时 ' + ((Date.now() - t0)/1000).toFixed(1) + ' 秒</div></div>' +
+    '</div>';
+  const a = $('#btn-report');
+  if(j.report_url){ a.href = j.report_url; a.hidden = false; } else { a.hidden = true; }
+  $('#archived').textContent = '已存入台账 · ' + siteLabel();
+  if(j.summary){ $('#summary').innerHTML = corners() + md2html(j.summary); $('#summary').hidden = false; }
+  setPhase('done');
+  loadRecent();
+}
+
+function reset(){
+  file = null; stopStages();
+  $('#preview').hidden = true; $('#preview').removeAttribute('src');
+  $('#vp-empty').hidden = false; $('#summary').hidden = true;
+  $('#cam').value = ''; $('#pick').value = '';
+  showErr(''); setPhase('idle');
+}
+
+async function analyze(){
+  const id = siteId();
+  if(!id){ showErr('请先选择机组 / 位置——台账要按它归档。'); return; }
+  if(!file){ showErr('还没有照片。'); return; }
+  showErr('');
+  setPhase('busy');
+  startStages();
+  try{
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('site', id);
+    const j = await api('/api/analyze', {method:'POST', body:fd});
+    stopStages();
+    showResult(j);
+  }catch(e){
+    stopStages();
+    setPhase('preview');
+    showErr('分析失败：' + e.message);
+  }
+}
+
+if($('#btn-shot')) $('#btn-shot').onclick = () => $('#cam').click();
+if($('#btn-pick')) $('#btn-pick').onclick = () => $('#pick').click();
+$('#cam').onchange  = e => onPicked(e.target.files[0]);
+$('#pick').onchange = e => onPicked(e.target.files[0]);
+$('#btn-go').onclick = analyze;
+$('#btn-reset').onclick = reset;
+$('#site').onchange = onSite;
+
+// 网页版的拖放区（手机版没有 #drop，跳过）
+const drop = $('#drop');
+if(drop){
+  drop.onclick = () => $('#pick').click();
+  ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.add('over');
+  }));
+  ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.remove('over');
+  }));
+  drop.addEventListener('drop', e => onPicked(e.dataTransfer.files[0]));
+  // 直接粘贴截图也能进来，值长在电脑上常用
+  window.addEventListener('paste', e => {
+    const it = Array.from(e.clipboardData.files || [])[0];
+    if(it) onPicked(it);
+  });
+}
+
+onSite();
+setPhase('idle');
+</script>

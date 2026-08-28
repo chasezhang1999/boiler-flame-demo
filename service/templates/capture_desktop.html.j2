@@ -1,0 +1,107 @@
+{% extends "base.html.j2" %}
+{% set page = "capture" %}
+{% block title %}拍照分析 · 炉智检{% endblock %}
+
+{% block head %}
+<style>
+  /* 网页版：左边取像与操作，右边结论与最近记录 */
+  .cap{display:grid;grid-template-columns:minmax(420px,1fr) minmax(360px,480px);
+       gap:0;align-items:stretch;min-height:calc(100vh - 51px)}
+  .left{padding:30px 36px;display:flex;flex-direction:column;gap:18px;border-right:1px solid var(--line)}
+  .right{padding:30px 36px;display:flex;flex-direction:column;gap:18px;background:var(--tint)}
+  .left .viewport{aspect-ratio:4/3}
+  #drop{cursor:pointer}
+  #drop.over{border-color:var(--accent);background:var(--accent-100)}
+  .hint{font-size:12px;color:var(--n600);text-wrap:pretty}
+  .fields{display:grid;grid-template-columns:minmax(220px,320px) auto auto;gap:10px;align-items:end}
+  .switch a{font-size:12px;color:var(--n600);text-decoration:none;border-bottom:1px solid var(--line)}
+  @media(max-width:1000px){ .cap{grid-template-columns:1fr} .right{border-top:1px solid var(--line)} }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="cap">
+
+  <div class="left">
+    <div>
+      <div class="kicker">Step 01 — 取像</div>
+      <h2 style="font-size:30px;margin:6px 0 0">上传一张看火孔照片</h2>
+      <div class="hint" style="max-width:54ch;margin-top:6px">
+        拖进下方框、点击选择，或直接 Ctrl+V 粘贴截图。约 20 秒出结论，结果自动进台账。
+      </div>
+    </div>
+
+    <div class="fields">
+      <div>
+        <label for="site">机组 / 位置 — 台账按它归档</label>
+        <select id="site" style="min-height:40px;font-size:15px">
+          <option value="">请选择…</option>
+          {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div id="act-idle"><button id="btn-pick" class="btn primary" style="height:40px">选择照片</button></div>
+      <div id="act-preview" hidden style="display:flex;gap:8px">
+        <button id="btn-go" class="btn primary" style="height:40px">开始分析</button>
+        <button id="btn-reset" class="btn" style="height:40px">换一张</button>
+      </div>
+      <div id="act-busy" hidden class="busybox" style="height:40px;padding:0 14px">
+        <span class="spin"></span><span>分析中 · 剩余约 <b id="remain">20</b> 秒</span>
+      </div>
+    </div>
+
+    <div class="viewport bp" id="drop">
+      <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+      <img id="preview" hidden alt="">
+      <div class="empty" id="vp-empty">把照片拖到这里<span style="font-size:12px;font-family:var(--b);color:var(--n600)">或点击选择 · 支持 Ctrl+V 粘贴</span></div>
+      <div class="guide"></div><div class="cross"></div>
+      <div class="foot"><span id="vp-site">未选择机位</span><span id="vp-state" class="tnum">待取像</span></div>
+      <div class="stages" id="stages" hidden>
+        <div class="st"><i></i><span>照片校验</span><span>待执行</span></div>
+        <div class="st"><i></i><span>CV 分割与指标</span><span>待执行</span></div>
+        <div class="st"><i></i><span>风险判级</span><span>待执行</span></div>
+        <div class="st"><i></i><span>生成报告 · 落台账</span><span>待执行</span></div>
+        <div class="bar"><i id="bar"></i></div>
+      </div>
+    </div>
+
+    {# 网页端没有摄像头入口，但脚本共用，保留隐藏的 input #}
+    <input id="cam"  type="file" accept="image/*" hidden>
+    <input id="pick" type="file" accept="image/*" hidden>
+
+    <div id="err" class="err" hidden></div>
+
+    <div class="hint" style="margin-top:auto;max-width:60ch">
+      热力图为可见光推算的<b>未标定相对亮温</b>，不代表实际温度；参考区间为经验值；风险判级由模型推断，不作为运行调整依据。
+    </div>
+  </div>
+
+  <div class="right">
+    <div id="result" hidden style="display:flex;flex-direction:column;gap:10px">
+      <div class="eyebrow">本次结论</div>
+      <div class="verdict" id="verdict"></div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
+        <a id="btn-report" class="btn primary" style="height:40px" target="_blank" href="#">查看完整报告</a>
+        <button class="btn" style="height:40px" onclick="window.print()">打印</button>
+      </div>
+      <div class="muted" style="font-size:11px" id="archived"></div>
+    </div>
+
+    <div id="summary" class="md bp" hidden style="padding:16px 18px;background:var(--bg)">
+      <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+    </div>
+
+    <div class="bp" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;background:var(--bg)">
+      <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+      <div class="eyebrow">最近在这个机位</div>
+      <div class="rowlist" id="recent"><div class="muted">选择机位后显示。</div></div>
+    </div>
+
+    <div class="switch" style="margin-top:auto"><a href="/?view=mobile">切换到手机版</a></div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block script %}
+{% include "_capture_core.j2" %}
+{% endblock %}

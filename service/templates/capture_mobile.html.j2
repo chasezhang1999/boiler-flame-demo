@@ -1,0 +1,91 @@
+{% extends "base.html.j2" %}
+{% set page = "capture" %}
+{% block title %}拍照分析 · 炉智检{% endblock %}
+
+{% block head %}
+<style>
+  /* 手机版：单列，拇指够得到的操作全在下半屏 */
+  .wrap{max-width:520px;margin:0 auto;padding:14px 14px 40px;display:flex;flex-direction:column;gap:12px}
+  .card{padding:12px;display:flex;flex-direction:column;gap:10px}
+  select#site{min-height:46px;font-size:16px}   /* 16px 以下 iOS 会自动放大页面 */
+  .btn.lg{height:48px;font-size:16px}
+  .switch{display:flex;justify-content:center;padding:8px 0 0}
+  .switch a{font-size:12px;color:var(--n600);text-decoration:none;border-bottom:1px solid var(--line)}
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="wrap">
+
+  <div class="bp card">
+    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+
+    {# 机位选择放在最上面：手机上先看到它才不会忘选 #}
+    <div>
+      <label for="site">机组 / 位置 — 台账按它归档</label>
+      <select id="site">
+        <option value="">请选择…</option>
+        {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div class="viewport" id="viewport">
+      <img id="preview" hidden alt="">
+      <div class="empty" id="vp-empty">未取像<span style="font-size:12px;font-family:var(--b);color:var(--n600)">对着看火孔正拍，拍满火焰</span></div>
+      <div class="guide"></div><div class="cross"></div>
+      <div class="foot"><span id="vp-site">未选择机位</span><span id="vp-state" class="tnum">待取像</span></div>
+      <div class="stages" id="stages" hidden>
+        <div class="st"><i></i><span>照片校验</span><span>待执行</span></div>
+        <div class="st"><i></i><span>CV 分割与指标</span><span>待执行</span></div>
+        <div class="st"><i></i><span>风险判级</span><span>待执行</span></div>
+        <div class="st"><i></i><span>生成报告 · 落台账</span><span>待执行</span></div>
+        <div class="bar"><i id="bar"></i></div>
+      </div>
+    </div>
+
+    {# capture="environment" 让手机直接开后置摄像头，不弹「拍照/相册」选单 #}
+    <input id="cam"  type="file" accept="image/*" capture="environment" hidden>
+    <input id="pick" type="file" accept="image/*" hidden>
+
+    <div id="act-idle" style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+      <button id="btn-shot" class="btn primary lg">拍照</button>
+      <button id="btn-pick" class="btn lg">相册</button>
+    </div>
+    <div id="act-preview" hidden style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+      <button id="btn-go" class="btn primary lg">开始分析</button>
+      <button id="btn-reset" class="btn lg">重拍</button>
+    </div>
+    <div id="act-busy" hidden class="busybox">
+      <span class="spin"></span><span>分析中 · 剩余约 <b id="remain">20</b> 秒</span>
+    </div>
+
+    <div id="result" hidden style="display:flex;flex-direction:column;gap:10px">
+      <div class="verdict" id="verdict"></div>
+      <a id="btn-report" class="btn primary lg" target="_blank" href="#">查看完整报告</a>
+      <div class="muted" style="text-align:center;font-size:11px" id="archived"></div>
+    </div>
+
+    <div id="err" class="err" hidden></div>
+  </div>
+
+  <div id="summary" class="md bp" hidden style="padding:14px 16px">
+    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+  </div>
+
+  <div class="bp card">
+    <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+    <div class="eyebrow">最近在这个机位</div>
+    <div class="rowlist" id="recent"><div class="muted">选择机位后显示。</div></div>
+  </div>
+
+  <div style="font-size:11px;color:var(--n600);text-wrap:pretty">
+    热力图为可见光推算的<b>未标定相对亮温</b>，不代表实际温度；参考区间为经验值；风险判级由模型推断，不作为运行调整依据。
+  </div>
+
+  <div class="switch"><a href="/?view=desktop">切换到网页版</a></div>
+</div>
+{% endblock %}
+
+{% block script %}
+{% include "_capture_core.j2" %}
+{% endblock %}
