@@ -30,11 +30,12 @@
      ▼
 后端 (FastAPI)
  ├ /api/analyze  代理转发 Dify 工作流 → 落台账 → 返回报告
- ├ /api/chat     查台账 + 调模型作答
+ ├ /api/chat     转发 Dify chatflow（未配 key 时直连模型兜底）
  ├ /api/history  台账明细 / 汇总 / CSV
  └ /api/chart    趋势图（服务端手排 SVG）
      │
-     ├──→ Dify 工作流 ──→ 回调后端 /analyze 和 /report
+     ├──→ Dify 分析工作流 ──→ 回调后端 /analyze 和 /report
+     ├──→ Dify 问答 chatflow ──→ 回调后端 /api/ledger_bundle
      └──→ SQLite 台账
 ```
 
@@ -267,4 +268,4 @@ data/             (gitignore) 台账，挂载卷，重建镜像不丢
 | 「证据是否充分」分支 | 不会输出「信息不足」，缺输入也照样给结论 |
 | 对话式追问 | 开始节点一次性收齐输入，不会追问补齐 |
 
-`docs/端到端流程图.svg` 画的是**目标设计**，上面四项图里有、代码里没有，对外讲注意口径。
+`docs/端到端流程图.svg` 画的是**目标设计**，上面三项图里有、代码里没有，对外讲注意口径。
