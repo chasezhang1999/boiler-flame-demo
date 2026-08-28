@@ -50,7 +50,14 @@
         <label for="site">机组 / 位置</label>
         <select id="site" style="min-width:190px">
           <option value="">全部机组</option>
-          {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+          {# 机组级选项：看「3号机组整体怎么样」比逐个机位翻更常用。
+             台账按前缀匹配该机组下的全部机位。 #}
+          <optgroup label="整台机组">
+            {% for u in units %}<option value="{{ u.id }}">{{ u.label }} · 全部机位</option>{% endfor %}
+          </optgroup>
+          <optgroup label="具体机位">
+            {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+          </optgroup>
         </select>
       </div>
       <div>

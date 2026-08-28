@@ -50,7 +50,14 @@
           <label for="site">机组（问题里点名也能识别）</label>
           <select id="site">
             <option value="">不限定</option>
-            {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+            {# 机组级选项：问「3号机组最近怎么样」是最自然的问法，
+               只能选到具体机位的话答不上来。台账按前缀匹配整台机组。 #}
+            <optgroup label="整台机组">
+              {% for u in units %}<option value="{{ u.id }}">{{ u.label }} · 全部机位</option>{% endfor %}
+            </optgroup>
+            <optgroup label="具体机位">
+              {% for s in sites %}<option value="{{ s.id }}">{{ s.label }}</option>{% endfor %}
+            </optgroup>
           </select>
         </div>
         <div style="margin-top:6px">
