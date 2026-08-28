@@ -7,7 +7,7 @@
 
 | | |
 |---|---|
-| 拍照分析 | 手机对着看火孔拍一张 → 约 7 秒出报告 |
+| 拍照分析 | 手机对着看火孔拍一张 → 约 20 秒出报告；手机版 / 网页版按 UA 自动分发 |
 | 图像分析 | 火焰分割、三级等值轮廓、相对亮温伪彩、11 项量化指标 |
 | 风险判级 | 视觉模型结合图像与指标，给出高/中/低、判据和核查建议 |
 | 历史台账 | 按机组和时间查记录、看趋势图、导出 CSV |
@@ -246,7 +246,10 @@ service/          后端
   ledger.py       台账（SQLite）
   charts.py       趋势图（手排 SVG，不引 matplotlib）
   sites.py        机组清单——唯一事实来源
-  templates/      报告模板 + 三个页面
+  templates/      报告模板 + 页面
+    capture_mobile / capture_desktop  拍照页两套版式，按 UA 分发，
+                                      ?view=mobile|desktop 可强制切换
+    _capture_core.j2                  两套版式共用的脚本（元素 id 一致）
   assets/fonts/   自托管字体
 dify/
   workflow.yml    分析工作流 DSL（含火焰照片校验分支）

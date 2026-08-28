@@ -11,11 +11,13 @@
 
 import json
 import os
+import re
 import time
 import uuid
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import (FastAPI, File, Form, HTTPException, Query, Request,
+                     UploadFile)
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -445,9 +447,27 @@ def _page(name: str, **kw) -> HTMLResponse:
     })
 
 
+# 手机版和网页版拍照页按 UA 分发。两套版式的元素 id 一致，脚本只有
+# _capture_core.j2 一份。
+_MOBILE_UA = re.compile(r"iphone|ipod|android.*mobile|windows phone|harmony", re.I)
+
+
 @app.get("/", response_class=HTMLResponse)
-def page_capture():
-    return _page("capture.html.j2", sites=sites.SITES)
+def page_capture(request: Request, view: str = ""):
+    """
+    拍照页两套版式：
+      手机版 capture_mobile   —— 单列、大按钮、直接开后置摄像头
+      网页版 capture_desktop  —— 左取像右结论、拖放与粘贴上传
+
+    默认按 UA 猜；?view=mobile / ?view=desktop 可强制切换，UA 判错时
+    有个不用改代码的出口。
+    """
+    if view in ("mobile", "desktop"):
+        mobile = view == "mobile"
+    else:
+        mobile = bool(_MOBILE_UA.search(request.headers.get("user-agent", "")))
+    return _page("capture_mobile.html.j2" if mobile else "capture_desktop.html.j2",
+                 sites=sites.SITES)
 
 
 @app.get("/history", response_class=HTMLResponse)

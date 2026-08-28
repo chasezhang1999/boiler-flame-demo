@@ -5,17 +5,22 @@
 {% block head %}
 <style>
   /* 网页版：左边取像与操作，右边结论与最近记录 */
-  .cap{display:grid;grid-template-columns:minmax(420px,1fr) minmax(360px,480px);
-       gap:0;align-items:stretch;min-height:calc(100vh - 51px)}
-  .left{padding:30px 36px;display:flex;flex-direction:column;gap:18px;border-right:1px solid var(--line)}
-  .right{padding:30px 36px;display:flex;flex-direction:column;gap:18px;background:var(--tint)}
-  .left .viewport{aspect-ratio:4/3}
+  .cap{display:grid;grid-template-columns:minmax(480px,1fr) 340px;
+       gap:0;align-items:start;min-height:calc(100vh - 51px)}
+  .left{padding:44px 56px 60px;display:flex;flex-direction:column;gap:26px;border-right:1px solid var(--line);
+        min-height:calc(100vh - 51px)}
+  .right{padding:30px 24px;display:flex;flex-direction:column;gap:16px;background:var(--tint);
+         position:sticky;top:51px;max-height:calc(100vh - 51px);overflow:auto}
+  .left .viewport{aspect-ratio:4/3;max-width:760px}
+  .left .fields{max-width:760px}
   #drop{cursor:pointer}
   #drop.over{border-color:var(--accent);background:var(--accent-100)}
   .hint{font-size:12px;color:var(--n600);text-wrap:pretty}
   .fields{display:grid;grid-template-columns:minmax(220px,320px) auto auto;gap:10px;align-items:end}
   .switch a{font-size:12px;color:var(--n600);text-decoration:none;border-bottom:1px solid var(--line)}
-  @media(max-width:1000px){ .cap{grid-template-columns:1fr} .right{border-top:1px solid var(--line)} }
+  @media(max-width:1000px){ .cap{grid-template-columns:1fr}
+    .left{padding:24px 20px;min-height:0}
+    .right{position:static;max-height:none;border-top:1px solid var(--line)} }
 </style>
 {% endblock %}
 

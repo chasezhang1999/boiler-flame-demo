@@ -141,10 +141,14 @@
   .verdict .badge{display:flex;align-items:center;padding:0 12px;font-family:var(--h);font-weight:600;font-size:16px;color:#fff}
   .verdict .badge.中{color:var(--ink)}
   .verdict .mid{padding:8px 10px;flex:1;min-width:0}
-  .rowlist .r{display:grid;grid-template-columns:100px 46px minmax(0,1fr) auto;gap:12px;align-items:center;
-              padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
+  /* 两行排：时间 + 等级 + 报告一行，结论单独一行可换行。窄栏里挤成一坨的元凶是四列硬排。 */
+  .rowlist .r{display:grid;grid-template-columns:auto auto 1fr;gap:4px 8px;align-items:center;
+              padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
   .rowlist .r:last-child{border-bottom:0}
-  .rowlist .r .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--n800)}
+  .rowlist .r .tnum{font-size:12px;color:var(--n600)}
+  .rowlist .r a{grid-row:1;grid-column:3;justify-self:end;font-size:12px}
+  .rowlist .r .muted{grid-row:1;grid-column:3;justify-self:end}
+  .rowlist .r .t{grid-column:1/-1;color:var(--n800);text-wrap:pretty;line-height:1.5}
   .busybox{display:flex;align-items:center;justify-content:center;gap:8px;height:44px;
            border:1px solid var(--line);font-family:var(--h);font-size:15px;color:var(--n700)}
   @media(max-width:900px){
