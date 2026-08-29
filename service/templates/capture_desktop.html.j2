@@ -4,34 +4,58 @@
 
 {% block head %}
 <style>
-  /* 网页版：左边取像与操作，右边结论与最近记录 */
-  .cap{display:grid;grid-template-columns:minmax(480px,1fr) 340px;
-       gap:0;align-items:start;min-height:calc(100vh - 51px)}
-  .left{padding:44px 56px 60px;display:flex;flex-direction:column;gap:26px;border-right:1px solid var(--line);
+  /* 网页版：左右等宽对称。左边取像，右边结论 —— 中缝在正 50%。
+     之前右栏钉死 340px，报告摘要里的表格和条形图全挤成一条，才改成 1:1。 */
+  .cap{display:grid;grid-template-columns:1fr 1fr;align-items:start;min-height:calc(100vh - 51px)}
+  .pane{padding:40px 48px 52px;display:flex;flex-direction:column;align-items:center;gap:24px;
         min-height:calc(100vh - 51px)}
-  .right{padding:30px 24px;display:flex;flex-direction:column;gap:16px;background:var(--tint);
-         position:sticky;top:51px;max-height:calc(100vh - 51px);overflow:auto}
-  .left .viewport{aspect-ratio:4/3;max-width:760px}
-  .left .fields{max-width:760px}
+  /* 栏本身撑满一半，内容居中并限宽 —— 超宽屏上两栏内容仍以中缝为轴对称 */
+  .pane>*{width:100%;max-width:840px}
+  .left{border-right:1px solid var(--line)}
+  .right{position:sticky;top:51px;max-height:calc(100vh - 51px);overflow:auto}
+
+  /* 两栏的标题块等高，中缝两侧的横向节奏才对得齐 */
+  .phead{min-height:92px}
+  .phead h2{font-size:30px;margin:6px 0 0}
+  .hint{font-size:12px;color:var(--n600);text-wrap:pretty;max-width:56ch}
+
+  .fields{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:10px;align-items:end}
+  .viewport{aspect-ratio:4/3}
   #drop{cursor:pointer}
   #drop.over{border-color:var(--accent);background:var(--accent-100)}
-  .hint{font-size:12px;color:var(--n600);text-wrap:pretty}
-  .fields{display:grid;grid-template-columns:minmax(220px,320px) auto auto;gap:10px;align-items:end}
+
+  .card{padding:18px 20px;background:var(--bg)}
+  /* 结论未出时的占位：#result 一旦显示就把它藏掉，不用另写 JS */
+  #result:not([hidden]) ~ #ph{display:none}
+  #ph{border:1px dashed var(--line);padding:34px 20px;text-align:center;color:var(--n600);
+      display:flex;flex-direction:column;gap:6px;align-items:center}
+  #ph b{font-family:var(--h);font-size:16px;color:var(--n700);font-weight:600}
   .switch a{font-size:12px;color:var(--n600);text-decoration:none;border-bottom:1px solid var(--line)}
-  @media(max-width:1000px){ .cap{grid-template-columns:1fr}
-    .left{padding:24px 20px;min-height:0}
-    .right{position:static;max-height:none;border-top:1px solid var(--line)} }
+  /* 量程条 `▬▬▮···` 断行就读不出来了，这一列钉死不换行 */
+  #summary td code{white-space:nowrap}
+
+  /* 中等宽度收边距，把宽度让给报告里的五列表格（它约要 560px 才不换行） */
+  @media(max-width:1500px){ .pane{padding-left:32px;padding-right:32px} }
+  /* 再窄就别硬撑两栏了 —— 每栏内容不足 560px 时，正是「挤」的老毛病 */
+  @media(max-width:1280px){
+    .cap{grid-template-columns:1fr}
+    {# 栏仍占满宽（分隔线要通到底），内容靠 .pane>* 的 max-width 限宽居中 #}
+    .pane{padding:26px 20px 34px;min-height:0}
+    .left{border-right:0;border-bottom:1px solid var(--line)}
+    .right{position:static;max-height:none;overflow:visible}
+    .phead{min-height:0}
+  }
 </style>
 {% endblock %}
 
 {% block body %}
 <div class="cap">
 
-  <div class="left">
-    <div>
+  <div class="pane left">
+    <div class="phead">
       <div class="kicker">Step 01 — 取像</div>
-      <h2 style="font-size:30px;margin:6px 0 0">上传一张看火孔照片</h2>
-      <div class="hint" style="max-width:54ch;margin-top:6px">
+      <h2>上传一张看火孔照片</h2>
+      <div class="hint" style="margin-top:6px">
         拖进下方框、点击选择，或直接 Ctrl+V 粘贴截图。约 20 秒出结论，结果自动进台账。
       </div>
     </div>
@@ -75,13 +99,21 @@
 
     <div id="err" class="err" hidden></div>
 
-    <div class="hint" style="margin-top:auto;max-width:60ch">
+    <div class="hint" style="margin-top:auto">
       热力图为可见光推算的<b>未标定相对亮温</b>，不代表实际温度；参考区间为经验值；风险判级由模型推断，不作为运行调整依据。
     </div>
   </div>
 
-  <div class="right">
-    <div id="result" hidden style="display:flex;flex-direction:column;gap:10px">
+  <div class="pane right">
+    <div class="phead">
+      <div class="kicker">Step 02 — 结论</div>
+      <h2>分析结论与历史对照</h2>
+      <div class="hint" style="margin-top:6px">
+        判级、量化指标摘要和完整报告入口都在这一侧；下方是同机位最近几次的记录。
+      </div>
+    </div>
+
+    <div id="result" hidden style="display:flex;flex-direction:column;gap:12px">
       <div class="eyebrow">本次结论</div>
       <div class="verdict" id="verdict"></div>
       <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
@@ -91,11 +123,16 @@
       <div class="muted" style="font-size:11px" id="archived"></div>
     </div>
 
-    <div id="summary" class="md bp" hidden style="padding:16px 18px;background:var(--bg)">
+    <div id="summary" class="md bp card" hidden>
       <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
     </div>
 
-    <div class="bp" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;background:var(--bg)">
+    <div id="ph" class="noprint">
+      <b>还没有结论</b>
+      <span style="font-size:12.5px;text-wrap:pretty;max-width:40ch">左侧选好机位、放入照片并点「开始分析」，结论和指标摘要会显示在这里。</span>
+    </div>
+
+    <div class="bp card" style="display:flex;flex-direction:column;gap:10px">
       <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
       <div class="eyebrow">最近在这个机位</div>
       <div class="rowlist" id="recent"><div class="muted">选择机位后显示。</div></div>
