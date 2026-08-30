@@ -8,6 +8,10 @@
      · 页面切到后台就停（切回来接着算，不会跳）
      · 系统开了「减弱动态效果」就定格成一张静态图
      · 没有 WebGL 就什么都不做，退回 body 的纯色底
+
+   想调观感就改这两个默认值，别的都不用动：
+     bgfx_gain  强度，越大越亮/越显眼（现 0.3）
+     bgfx_speed 速度倍率，1.0 是基准（现 0.7，即慢三成）
 #}
 <canvas id="bgfx" aria-hidden="true"></canvas>
 <script>
@@ -48,7 +52,7 @@
 '  vec2 uv = gl_FragCoord.xy / uRes;',
 '  vec2 p  = (uv - 0.5) * vec2(uRes.x / uRes.y, 1.0) * 1.35;',   // 数越小结构越大
 // 域扭曲：q 扰动 r，r 再扰动最终采样，三层套下来就有流体的翻涌感
-'  float t = uT * 0.055;',
+'  float t = uT * 0.055 * {{ bgfx_speed|default(0.7) }};',
 '  vec2 q = vec2(fbm(p + vec2(0.0, t)), fbm(p + vec2(5.2, 1.3) - vec2(t, 0.0)));',
 '  vec2 r = vec2(fbm(p + 3.4*q + vec2(1.7, 9.2) + t*0.7),',
 '                fbm(p + 3.4*q + vec2(8.3, 2.8) - t*0.6));',
@@ -123,7 +127,7 @@
     prev = now;
     gl.uniform2f(uRes, cv.width, cv.height);
     gl.uniform1f(uT, still ? 8.0 : acc);
-    gl.uniform1f(uG, {{ bgfx_gain|default(0.5) }});
+    gl.uniform1f(uG, {{ bgfx_gain|default(0.3) }});
     gl.uniform1f(uD, document.documentElement.getAttribute('data-theme') === 'light' ? 0.0 : 1.0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
