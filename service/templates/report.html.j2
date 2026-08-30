@@ -6,6 +6,26 @@
 {# 字体自托管，不走 fonts.googleapis.com：国内连不上，而这个 link 阻塞渲染，
    挂上去报告页会白屏等到超时。文件用 fetch_fonts.py 抓取。 #}
 <link rel="stylesheet" href="/assets/fonts/fonts.css">
+<script>
+// 同步执行，必须在样式之前，否则会先闪一帧深色。跟主站共用 theme 这个键。
+(function(){
+  try{
+    var t = localStorage.getItem('theme');
+    if(!t) t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    if(t === 'light') document.documentElement.setAttribute('data-theme','light');
+  }catch(e){}
+})();
+</script>
+{%- set LIGHT %}
+      --ink:#1d1f20;--muted:#5d5d60;--faint:#98989b;--line:#e3e3e6;
+      --tint:{{ bg }};--tint-line:{{ line }};
+      --page:#fff;--panel:#fff;--imgbg:#e9e9ea;
+      --link:#416180;--link-hover:#2c455d;--link-soft:#749dc4;
+      --info-bg:#eef6ff;--info-line:#b5d9fd;
+      --track:#eeeef0;--band:#d4d4d7;--code-bg:#f5f5f8;
+      --st-low:#1f6d9c;--st-high:#c2410c;--st-ok:#5d5d60;--st-ink:#1d1f20;
+      --on-state:#fff;
+{% endset -%}
 <style>
   /* 屏幕上走深色（会场投屏白底会整片糊掉），打印时在下面的 @media print 里
      把整套变量翻回浅色 —— 报告是要打印和存 PDF 的，那边必须是白底黑字。
@@ -25,6 +45,8 @@
     --h:"Barlow Condensed",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
     --b:"Barlow",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
   }
+  /* 手动切到浅色。跟主站共用 localStorage 里的 theme 键。 */
+  :root[data-theme="light"]{ {{ LIGHT }} }
   *{box-sizing:border-box}
   html,body{background:var(--page)}
   body{margin:0;color:var(--ink);font:15px/1.55 var(--b)}
@@ -61,13 +83,14 @@
 
   /* 关键指标带：把最该先看的四项提到最前 */
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);margin-top:1px}
-  .kpi{background:var(--panel);padding:16px 18px}
-  .kpi .k{font-size:12px;color:var(--muted)}
-  .kpi .v{display:flex;align-items:baseline;gap:5px;margin-top:5px}
-  .kpi .v b{font-family:var(--h);font-weight:600;font-size:30px;line-height:1;
+  .kpi{background:var(--panel);padding:20px 22px}
+  /* 这四格是全篇最该先看到的东西，字号整体往上提一档 */
+  .kpi .k{font-size:14.5px;color:var(--muted)}
+  .kpi .v{display:flex;align-items:baseline;gap:6px;margin-top:7px}
+  .kpi .v b{font-family:var(--h);font-weight:600;font-size:42px;line-height:1;
             font-variant-numeric:tabular-nums}
-  .kpi .v span{font-size:12px;color:var(--muted)}
-  .kpi .s{font-family:var(--h);font-size:12px;letter-spacing:.06em;margin-top:7px}
+  .kpi .v span{font-size:15px;color:var(--muted)}
+  .kpi .s{font-family:var(--h);font-size:14px;letter-spacing:.05em;margin-top:9px}
 
   /* 图与区块 */
   .imgs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:34px}
@@ -131,6 +154,10 @@
   .note{margin-top:27px;border-top:1px solid var(--line);padding-top:12px;
         font-size:12px;color:var(--muted);text-wrap:pretty}
   .note b{color:var(--ink);font-weight:600}
+  .themebtn{margin-left:14px;border:1px solid var(--line);background:transparent;
+            color:var(--muted);cursor:pointer;padding:3px 10px;font-family:var(--h);
+            font-weight:600;font-size:12px;letter-spacing:.04em;vertical-align:1px}
+  .themebtn:hover{color:var(--ink)}
   a{color:var(--link);text-underline-offset:3px}
   a:hover{color:var(--link-hover)}
 
@@ -148,19 +175,11 @@
      颜色都在变量里，这里重定义一遍就够。 */
   @media print{
     .wrap{padding:0}
+    .noprint{display:none!important}
     details{display:none}
     .verdict,.kpis,figure,.sec,table{break-inside:avoid}
     a[href]::after{content:""}
-    :root{
-      --ink:#1d1f20;--muted:#5d5d60;--faint:#98989b;--line:#e3e3e6;
-      --tint:{{ bg }};--tint-line:{{ line }};
-      --page:#fff;--panel:#fff;--imgbg:#e9e9ea;
-      --link:#416180;--link-hover:#2c455d;--link-soft:#749dc4;
-      --info-bg:#eef6ff;--info-line:#b5d9fd;
-      --track:#eeeef0;--band:#d4d4d7;--code-bg:#f5f5f8;
-      --st-low:#1f6d9c;--st-high:#c2410c;--st-ok:#5d5d60;--st-ink:#1d1f20;
-      --on-state:#fff;
-    }
+    :root{ {{ LIGHT }} }
     /* 等级色块和参考区间带靠底色传达信息，必须打出来 */
     .lv,.scale i.on,.track,.track .band,.state,.verdict{
       -webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -169,7 +188,8 @@
 
 <div class="top">
   <span class="brand">锅炉运行分析助手</span>
-  <div class="meta">{{ meta }}</div>
+  <div class="meta">{{ meta }}<button class="themebtn noprint" id="themebtn" type="button"
+       title="切换浅色 / 深色"><span id="themetext">深色</span></button></div>
 </div>
 
 {# 标题不能挂在 headline 上：模型偶尔不返回它，那样整页就没标题了。
@@ -214,6 +234,15 @@
 </div>
 {% endif %}
 
+{# 建议紧跟在重点指标后面：先看哪几项越界，紧接着就是该怎么办。
+   原来夹在「判据」旁边，翻到大半页才看得到。 #}
+{% if suggestions %}
+<div class="sec advice" style="margin-top:27px">
+  <h3>运行调整建议</h3>
+  <ol>{% for x in suggestions %}<li><span>{{ x }}</span></li>{% endfor %}</ol>
+</div>
+{% endif %}
+
 <div class="imgs">
   <figure>
     <img src="{{ contour_url }}" alt="火焰轮廓">
@@ -241,19 +270,12 @@
   </div>
 </div>
 
-<div class="cols" style="margin-top:27px">
-  <div class="sec">
-    <div class="sechd"><h3>判据</h3></div>
-    {% if reasons %}
-    <ul class="list">{% for x in reasons %}<li><span>{{ x }}</span></li>{% endfor %}</ul>
-    {% else %}<p class="muted" style="margin-top:12px">—</p>{% endif %}
-  </div>
-  {% if suggestions %}
-  <div class="sec advice">
-    <h3>运行调整建议</h3>
-    <ol>{% for x in suggestions %}<li><span>{{ x }}</span></li>{% endfor %}</ol>
-  </div>
-  {% endif %}
+{# 建议已经提到重点指标下面了，判据独占一行 #}
+<div class="sec" style="margin-top:27px">
+  <div class="sechd"><h3>判据</h3></div>
+  {% if reasons %}
+  <ul class="list">{% for x in reasons %}<li><span>{{ x }}</span></li>{% endfor %}</ul>
+  {% else %}<p class="muted" style="margin-top:12px">—</p>{% endif %}
 </div>
 {% else %}
 <div class="sec" style="margin-top:34px">
@@ -327,4 +349,20 @@
   本报告仅用于技术演示，不作为运行调整依据。
 </div>
 
-</div></body></html>
+</div>
+
+<script>
+(function(){
+  var btn = document.getElementById('themebtn'), txt = document.getElementById('themetext');
+  function cur(){ return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; }
+  function apply(t){
+    if(t === 'light') document.documentElement.setAttribute('data-theme','light');
+    else document.documentElement.removeAttribute('data-theme');
+    try{ localStorage.setItem('theme', t); }catch(e){}
+    if(txt) txt.textContent = t === 'light' ? '浅色' : '深色';
+  }
+  apply(cur());
+  if(btn) btn.onclick = function(){ apply(cur() === 'light' ? 'dark' : 'light'); };
+})();
+</script>
+</body></html>

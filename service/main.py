@@ -348,14 +348,19 @@ def api_by_site(days: int = 30):
 
 @app.get("/api/chart")
 def api_chart(kind: str = "line", site: str = "", metric: str = "temp_index_p95",
-              days: int = 30):
-    """趋势图。直接返回 SVG，前端 <img> 或 <object> 都能用。"""
+              days: int = 30, theme: str = "dark"):
+    """
+    趋势图。直接返回 SVG，前端 <img> 或 <object> 都能用。
+
+    theme 由前端带上来：SVG 是通过 <img src> 拿的，页面的 CSS 变量进不到里面，
+    所以深浅两套只能在服务端出。切主题时前端会带新的 theme 重新请求。
+    """
     try:
         if kind == "levels":
             rows = [{"label": sites.label_of(r["site"]),
                      "高": r["high"], "中": 0, "低": max(r["n"] - r["high"], 0)}
                     for r in ledger.by_site(days)]
-            svg = charts.level_bars(rows)
+            svg = charts.level_bars(rows, theme=theme)
         else:
             pts = ledger.series(site, metric, days)
             meta = report_tpl.METRIC_BY_KEY.get(metric)
@@ -365,6 +370,7 @@ def api_chart(kind: str = "line", site: str = "", metric: str = "temp_index_p95"
                                    meta["label"] if meta else metric),
                 unit=meta["unit"] if meta else "",
                 band=meta["band"] if meta else None,
+                theme=theme,
             )
     except ValueError as e:
         raise HTTPException(400, str(e))

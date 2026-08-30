@@ -13,12 +13,24 @@ import html
 W, H = 720, 260                     # 画布
 PAD_L, PAD_R, PAD_T, PAD_B = 52, 16, 22, 34
 
-INK = "#1d1f20"
-MUTED = "#5d5d60"
-FAINT = "#98989b"
-LINE = "#e3e3e6"
-ACCENT = "#416180"
+# 两套配色。SVG 是通过 <img src="/api/chart"> 拿的，页面的 CSS 变量进不去，
+# 所以只能由调用方带 theme 参数，服务端出对应的那一套。
+# 判级色（高/中/低）两套通用 —— 那是信息本身，换主题不该变意思。
+THEMES = {
+    "light": {"ink": "#1d1f20", "muted": "#5d5d60", "faint": "#98989b",
+              "line": "#e3e3e6", "accent": "#416180",
+              "bg": "#ffffff", "band": "#eef3f7", "on_bar": "#ffffff"},
+    "dark":  {"ink": "#f0f0f3", "muted": "#a2a2a9", "faint": "#75757c",
+              "line": "rgba(255,255,255,.18)", "accent": "#a8c9e8",
+              # 透明底：图表直接坐在页面的深色背景上，省得和页面差半个色号
+              "bg": "none", "band": "rgba(255,255,255,.07)", "on_bar": "#16181a"},
+}
+
 LEVEL_COLOR = {"高": "#e0483a", "中": "#fbaf17", "低": "#22a35c", "未知": "#7a7a7d"}
+
+
+def palette(theme):
+    return THEMES.get(theme) or THEMES["dark"]
 
 FONT = ('font-family="Barlow,-apple-system,Segoe UI,Microsoft YaHei,sans-serif"')
 
@@ -27,13 +39,15 @@ def _esc(s):
     return html.escape(str(s), quote=True)
 
 
-def _shell(body, w=W, h=H, title=""):
+def _shell(body, w=W, h=H, title="", theme="dark"):
     t = ('<title>%s</title>' % _esc(title)) if title else ""
+    bg = palette(theme)["bg"]
+    # 深色下底色给 none：图直接坐在页面背景上，不会和页面差半个色号
+    rect = "" if bg == "none" else ('<rect width="%d" height="%d" fill="%s"/>' % (w, h, bg))
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" '
-        'viewBox="0 0 %d %d" %s>%s'
-        '<rect width="%d" height="%d" fill="#fff"/>%s</svg>'
-        % (w, h, w, h, FONT, t, w, h, body)
+        'viewBox="0 0 %d %d" %s>%s%s%s</svg>'
+        % (w, h, w, h, FONT, t, rect, body)
     )
 
 
@@ -55,16 +69,17 @@ def _fmt(v):
     return ("%g" % round(v, 3)) if abs(v) < 10 else ("%.1f" % v)
 
 
-def line_chart(points, label="", unit="", band=None, title=""):
+def line_chart(points, label="", unit="", band=None, title="", theme="dark"):
     """
     折线图。points = [{"ts": "...", "v": 数值}, ...]，已按时间升序。
     band = (下限, 上限) 时在背景画一条参考带。
     """
+    P = palette(theme)
     if not points:
         return _shell(
             '<text x="%d" y="%d" text-anchor="middle" font-size="13" fill="%s">'
-            '台账里还没有该条件下的记录</text>' % (W // 2, H // 2, MUTED),
-            title=title)
+            '台账里还没有该条件下的记录</text>' % (W // 2, H // 2, P["muted"]),
+            title=title, theme=theme)
 
     vals = [p["v"] for p in points]
     lo, hi = _nice_bounds(vals + ([band[0], band[1]] if band else []))
@@ -81,52 +96,53 @@ def line_chart(points, label="", unit="", band=None, title=""):
     # 参考带
     if band:
         y1, y2 = Y(band[1]), Y(band[0])
-        out.append('<rect x="%.1f" y="%.1f" width="%d" height="%.1f" fill="#eef3f7"/>'
-                   % (PAD_L, y1, iw, max(y2 - y1, 1)))
+        out.append('<rect x="%.1f" y="%.1f" width="%d" height="%.1f" fill="%s"/>'
+                   % (PAD_L, y1, iw, max(y2 - y1, 1), P["band"]))
 
     # 横向网格 + 纵轴刻度
     for k in range(5):
         v = lo + (hi - lo) * k / 4
         y = Y(v)
         out.append('<line x1="%d" y1="%.1f" x2="%d" y2="%.1f" stroke="%s"/>'
-                   % (PAD_L, y, W - PAD_R, y, LINE))
+                   % (PAD_L, y, W - PAD_R, y, P["line"]))
         out.append('<text x="%d" y="%.1f" text-anchor="end" font-size="10.5" '
-                   'fill="%s">%s</text>' % (PAD_L - 7, y + 3.5, FAINT, _fmt(v)))
+                   'fill="%s">%s</text>' % (PAD_L - 7, y + 3.5, P["faint"], _fmt(v)))
 
     # 折线
     d = " ".join("%s%.1f %.1f" % ("M" if i == 0 else "L", X(i), Y(p["v"]))
                  for i, p in enumerate(points))
     out.append('<path d="%s" fill="none" stroke="%s" stroke-width="2" '
-               'stroke-linejoin="round"/>' % (d, ACCENT))
+               'stroke-linejoin="round"/>' % (d, P["accent"]))
 
     # 数据点；越出参考带的标红
     for i, p in enumerate(points):
         bad = band and not (band[0] <= p["v"] <= band[1])
         out.append('<circle cx="%.1f" cy="%.1f" r="%s" fill="%s"/>'
                    % (X(i), Y(p["v"]), "3.6" if bad else "2.6",
-                      LEVEL_COLOR["高"] if bad else ACCENT))
+                      LEVEL_COLOR["高"] if bad else P["accent"]))
 
     # 横轴：只标首尾和中间，标多了挤成一团
     marks = {0, len(points) - 1} | ({len(points) // 2} if len(points) > 2 else set())
     for i in sorted(marks):
         out.append('<text x="%.1f" y="%d" text-anchor="middle" font-size="10.5" '
                    'fill="%s">%s</text>'
-                   % (X(i), H - 12, FAINT, _esc(points[i]["ts"][5:16])))
+                   % (X(i), H - 12, P["faint"], _esc(points[i]["ts"][5:16])))
 
     head = "%s%s · 共 %d 次" % (label, ("（%s）" % unit if unit else ""), len(points))
     out.append('<text x="%d" y="14" font-size="12" fill="%s">%s</text>'
-               % (PAD_L, MUTED, _esc(head)))
-    return _shell("".join(out), title=title or label)
+               % (PAD_L, P["muted"], _esc(head)))
+    return _shell("".join(out), title=title or label, theme=theme)
 
 
-def level_bars(rows, title=""):
+def level_bars(rows, title="", theme="dark"):
     """
     风险等级分布堆叠条。rows = [{"label":.., "高":n, "中":n, "低":n}, ...]
     """
+    P = palette(theme)
     if not rows:
         return _shell('<text x="%d" y="%d" text-anchor="middle" font-size="13" '
-                      'fill="%s">台账里还没有记录</text>' % (W // 2, H // 2, MUTED),
-                      title=title)
+                      'fill="%s">台账里还没有记录</text>' % (W // 2, H // 2, P["muted"]),
+                      title=title, theme=theme)
 
     bar_h, gap = 22, 12
     h = PAD_T + len(rows) * (bar_h + gap) + 26
@@ -145,18 +161,18 @@ def level_bars(rows, title=""):
                        % (x, y, w, bar_h, LEVEL_COLOR[k]))
             if w > 22:
                 out.append('<text x="%.1f" y="%d" text-anchor="middle" font-size="11" '
-                           'fill="#fff">%d</text>' % (x + w / 2, y + 15, n))
+                           'fill="%s">%d</text>' % (x + w / 2, y + 15, P["on_bar"], n))
             x += w
         out.append('<text x="%d" y="%d" text-anchor="end" font-size="11.5" fill="%s">'
-                   '%s</text>' % (PAD_L - 8, y + 15, INK, _esc(r["label"])))
+                   '%s</text>' % (PAD_L - 8, y + 15, P["ink"], _esc(r["label"])))
         out.append('<text x="%d" y="%d" font-size="11" fill="%s">%d 次</text>'
-                   % (PAD_L + iw + 8, y + 15, MUTED, total))
+                   % (PAD_L + iw + 8, y + 15, P["muted"], total))
 
     lx = PAD_L
     for k in ("高", "中", "低"):
         out.append('<rect x="%d" y="%d" width="10" height="10" fill="%s"/>'
                    % (lx, h - 18, LEVEL_COLOR[k]))
         out.append('<text x="%d" y="%d" font-size="11" fill="%s">%s风险</text>'
-                   % (lx + 14, h - 9, MUTED, k))
+                   % (lx + 14, h - 9, P["muted"], k))
         lx += 74
-    return _shell("".join(out), h=h, title=title or "风险等级分布")
+    return _shell("".join(out), h=h, title=title or "风险等级分布", theme=theme)

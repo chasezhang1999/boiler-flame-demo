@@ -150,7 +150,8 @@ function renderChips(){
 
 function drawChart(){
   const {site, days} = q();
-  $('#chart').src = '/api/chart?' + new URLSearchParams({site, days, metric}) + '&_=' + Date.now();
+  {# 带上主题：SVG 由 <img> 拿，页面的 CSS 变量进不去，只能服务端出对应那套色 #}
+  $('#chart').src = '/api/chart?' + new URLSearchParams({site, days, metric, theme: currentTheme()}) + '&_=' + Date.now();
 }
 
 function kpi(k, v, unit, note, color){
@@ -233,6 +234,8 @@ async function del(link){
 
 async function load(){
   drawChart();
+// 切主题要重取图：SVG 的配色是服务端出的，不会跟着 CSS 变
+addEventListener('themechange', drawChart);
   try{
     await loadSummary();
     await loadBySite();
