@@ -210,7 +210,9 @@ function showResult(j){
       '<div class="mid"><div style="font-family:var(--h);font-size:17px;line-height:1.15">' +
         esc(siteLabel()) + '</div>' +
       '<div style="font-size:11px;color:var(--n600);margin-top:2px" class="tnum">' +
-        new Date().toLocaleString('zh-CN', {hour12:false}).slice(0,16) +
+        {# 别用 slice(0,16) 截 —— zh-CN 的月份日期不补零，8月30日会切成
+           「2026/8/30 18:05:」多一个冒号。按秒去掉才稳。 #}
+        new Date().toLocaleString('zh-CN', {hour12:false}).replace(/:\d\d$/, '') +
         ' · 用时 ' + ((Date.now() - t0)/1000).toFixed(1) + ' 秒</div></div>' +
     '</div>';
   const a = $('#btn-report');
