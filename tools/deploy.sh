@@ -23,15 +23,23 @@ die()  { printf '\n!! %s\n' "$1" >&2; exit 1; }
 cd "$(dirname "$0")/.."
 
 # ---------------------------------------------------------------- 1. 提交
+# 两种「没提交」要分开对待：
+#   改过的已跟踪文件 —— 你以为会发布，实际不会，必须拦下来
+#   全新的未跟踪文件 —— 多半是还没想好的半成品，提醒一句就放行
 step 1 "检查本机改动"
-if [ -n "$(git status --porcelain)" ]; then
+CHANGED=$(git status --porcelain --untracked-files=no)
+UNTRACKED=$(git ls-files --others --exclude-standard)
+
+if [ -n "$CHANGED" ]; then
   if [ $# -eq 0 ]; then
-    git status --short
-    die "上面这些改动还没提交。要么先自己 git commit，要么给个说明重跑：
+    echo "$CHANGED"
+    die "上面这些改动还没提交，发布出去的不会包含它们。
+   要么自己 git commit，要么给个说明重跑：
      bash tools/deploy.sh \"改了什么\""
   fi
-  echo "将要提交下面这些文件："
-  git status --short
+  echo "将要提交："
+  echo "$CHANGED"
+  [ -n "$UNTRACKED" ] && { echo "顺带把这些新文件也加进来："; echo "$UNTRACKED" | sed 's/^/  + /'; }
   # 公开仓库，提交前让人眼过一遍，免得把不该进的东西推上去
   printf '\n确认提交并推送到 GitHub？[y/N] '
   read -r yes
@@ -39,6 +47,12 @@ if [ -n "$(git status --porcelain)" ]; then
   git add -A
   git commit -q -m "$1"
   echo "已提交：$(git log --oneline -1)"
+elif [ -n "$UNTRACKED" ]; then
+  echo "工作区没有改动。下面这些新文件不在 git 里，不会被发布："
+  echo "$UNTRACKED" | sed 's/^/  ? /'
+  printf '\n继续发布已提交的内容？[y/N] '
+  read -r yes
+  [ "$yes" = "y" ] || [ "$yes" = "Y" ] || die "已取消，什么都没做。"
 else
   echo "工作区干净，直接发布已提交的内容。"
 fi
