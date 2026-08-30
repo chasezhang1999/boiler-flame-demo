@@ -233,7 +233,11 @@
   .busybox{display:flex;align-items:center;justify-content:center;gap:8px;height:44px;
            border:1px solid var(--line);font-family:var(--h);font-size:15px;color:var(--n700)}
   @media(max-width:900px){
-    nav .status{display:none}
+    {# 窄屏只藏队名，主题切换按钮要留着 —— 手机上也得能切 #}
+    nav .status{padding:0 10px;gap:0}
+    nav .status>span{display:none}
+    .themebtn{padding:5px 9px}
+    .themebtn span{display:none}
     .brand{padding:0 12px}
     nav .tabs a{padding:14px 12px;font-size:14px}
   }
