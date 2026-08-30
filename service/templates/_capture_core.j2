@@ -149,14 +149,24 @@ function showRejected(j){
         ' · 后续步骤未执行</div></div>' +
     '</div>';
   $('#btn-report').hidden = true;
+  // 网页版把「查看报告 / 打印」整行藏掉 —— 打印一张「这不是火焰照片」没有意义。
+  // 手机版没有这一行，取不到就跳过。
+  const row = $('#act-report');
+  if(row) row.hidden = true;
   $('#archived').textContent = '本次未进台账。换一张炉膛火焰照片再试。';
   if(j.summary){ $('#summary').innerHTML = corners() + md2html(j.summary); $('#summary').hidden = false; }
   setPhase('done');
+  // setPhase 会把取景框角标写成「已归档」，这里同样不能这么说
+  const st = $('#vp-state');
+  if(st) st.textContent = '未识别';
 }
 
 function showResult(j){
   const lv = j.risk_level || '未知';
   if(lv === REJECTED){ showRejected(j); return; }
+  // 上一次可能是被拒的，那时把这一行藏了，正常出结论要放回来
+  const row = $('#act-report');
+  if(row) row.hidden = false;
   $('#verdict').innerHTML =
     '<div class="top">' +
       '<div class="badge ' + esc(lv) + '" style="background:' +
