@@ -1,6 +1,6 @@
 {# 拍照分析的共用逻辑。手机版和网页版版式不同，但元素 id 一致，脚本只此一份。
    引用它的页面必须提供：#site #cam #pick #preview #vp-empty #vp-site #vp-state
-   #stages(.st + #bar) #act-idle #act-preview #act-busy(#remain) #result #verdict
+   #stages(.st + #bar) #act-idle #act-preview #act-busy(#busy-text) #result #verdict
    #btn-report #archived #err #summary #recent #btn-go #btn-reset
    可选：#btn-shot #btn-pick #drop #}
 <script>
@@ -98,37 +98,65 @@ async function onPicked(f){
   setPhase('preview');
 }
 
-// 进度是按经验耗时推进的估计值，不是后端回调——一次 blocking 调用拿不到中间态，
-// 但等待期完全没反馈更糟。四段合计约 20 秒，跑完停在最后一段等真结果。
-// 四段的时间点按实测校准：照片校验约 3s（不是火焰的话就停在这儿了），
-// CV 很快，判级是模型调用约 4.5s，出报告落台账约 1s。整条链路单次约 10~14 秒。
-// 原来写死 20 秒是初版的估计，实测下来偏长，进度条会在最后一段干等。
-const STAGE_MARKS = [3, 5, 10, 14];
-const STAGE_TOTAL = STAGE_MARKS[STAGE_MARKS.length - 1];
+// 进度来自后端转发的真实节点事件（/api/analyze_stream），不是定时器。
+// 以前是按 [3,5,10,14] 秒依次点亮的估计值，跟后端跑到哪一步毫无关系 ——
+// 传一张非火焰照片，工作流第一步就停了，界面上却照样显示「CV 分割与指标 5s ✓」。
+//
+// 界面上四行，各自对应 Dify 工作流里的哪些节点。节点名必须和 dify/workflow.yml
+// 里的 title 一字不差 —— 改了工作流的节点名，这里要跟着改，否则那一行永远不亮。
+const NODE_ROWS = [
+  ['图像校验', '是火焰照片？'],
+  ['CV 图像分析', '解析 CV 结果'],
+  ['结焦风险判级'],
+  ['渲染报告', '汇总输出'],
+];
+// 这个节点一跑，就说明照片没通过校验，后面三行根本不会执行
+const REJECT_NODE = '拒绝并说明';
+// 开始 / 汇合 / 结束 是编排用的，不给用户看
 
-function startStages(){
+function rowOf(name){
+  return NODE_ROWS.findIndex(list => list.indexOf(name) >= 0);
+}
+
+function paintRow(i, cls, text){
+  const n = $$('#stages .st')[i];
+  if(!n) return;
+  n.className = 'st' + (cls ? ' ' + cls : '');
+  n.lastElementChild.textContent = text;
+}
+
+function resetStages(){
   t0 = Date.now();
-  // 每次都把这行重建：超时那段会整个换掉文字，#remain 会被连带删掉，
-  // 不复原的话第二次分析就取不到它了
-  $('#busy-text').innerHTML = '分析中 · 剩余约 <b id="remain">' + STAGE_TOTAL + '</b> 秒';
-  $$('#stages .st').forEach(el => { el.className = 'st'; el.lastElementChild.textContent = '待执行'; });
+  $('#busy-text').textContent = '分析中';
+  $$('#stages .st').forEach((n, i) => paintRow(i, '', '待执行'));
+  $('#bar').style.width = '4%';
+  // 只用来显示"已经等了多久"，不再假装知道还剩几秒
   timer = setInterval(() => {
-    const el = (Date.now() - t0) / 1000;
-    // 超过估计值就别再报假的剩余秒数了。原来会一直卡在「剩余约 1 秒」——
-    // 现场并发高时实测要等三十几秒，盯着那个「1 秒」看半分钟很难受。
-    if(el > STAGE_TOTAL){
-      $('#busy-text').textContent = '分析中 · 前面还有排队，已等 ' + Math.round(el) + ' 秒';
-    } else {
-      $('#remain').textContent = Math.max(1, Math.round(STAGE_TOTAL - el));
-    }
-    let cur = STAGE_MARKS.findIndex(m => el < m);
-    if(cur === -1) cur = STAGE_MARKS.length - 1;
-    $$('#stages .st').forEach((n, i) => {
-      n.className = 'st' + (i < cur ? ' done' : i === cur ? ' on' : '');
-      n.lastElementChild.textContent = i < cur ? STAGE_MARKS[i] + 's' : i === cur ? '进行中' : '待执行';
-    });
-    $('#bar').style.width = Math.min(96, 8 + el / STAGE_TOTAL * 88) + '%';
-  }, 300);
+    const el = Math.round((Date.now() - t0) / 1000);
+    $('#busy-text').textContent = '分析中 · 已等 ' + el + ' 秒';
+  }, 500);
+}
+
+// 收到一条真实的节点事件就画一次。这里不做任何时间估计 ——
+// 屏幕上显示的每一个"已完成"和每一个秒数，都是后端真的跑过才出现的。
+function onNode(ev){
+  if(ev.name === REJECT_NODE && ev.state === 'start'){
+    paintRow(0, '', '未通过');
+    for(let i = 1; i < NODE_ROWS.length; i++) paintRow(i, '', '已跳过');
+    $('#bar').style.width = '100%';
+    return;
+  }
+  const i = rowOf(ev.name);
+  if(i < 0) return;
+  if(ev.state === 'start'){
+    paintRow(i, 'on', '进行中');
+  } else {
+    // 一行对应多个节点时，最后一个跑完才算这行完成
+    const last = NODE_ROWS[i][NODE_ROWS[i].length - 1];
+    if(ev.name === last) paintRow(i, ev.ok ? 'done' : '', ev.ok ? ev.sec + 's' : '失败');
+    else paintRow(i, 'on', '进行中');
+    $('#bar').style.width = Math.round((i + 1) / NODE_ROWS.length * 100) + '%';
+  }
 }
 function stopStages(){ clearInterval(timer); timer = null; }
 
@@ -194,18 +222,53 @@ function reset(){
   showErr(''); setPhase('idle');
 }
 
+// 读事件流。每收到一行 `data: {...}` 就交给 onNode 画进度，
+// 收到 result 就是最终结论。返回 null 表示流没走完（会退回 blocking 接口重来）。
+async function readStream(resp){
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '', out = null;
+  for(;;){
+    const {done, value} = await reader.read();
+    if(done) break;
+    buf += dec.decode(value, {stream:true});
+    const lines = buf.split('\n');
+    buf = lines.pop();                       // 最后一段可能是半行，留到下次
+    for(const line of lines){
+      if(!line.startsWith('data:')) continue;
+      let ev;
+      try{ ev = JSON.parse(line.slice(5).trim()); }catch(_){ continue; }
+      if(ev.t === 'node')       onNode(ev);
+      else if(ev.t === 'result') out = ev;
+      else if(ev.t === 'error')  throw new Error(ev.message || '分析出错');
+    }
+  }
+  return out;
+}
+
 async function analyze(){
   const id = siteId();
   if(!id){ showErr('请先选择机组 / 位置——台账要按它归档。'); return; }
   if(!file){ showErr('还没有照片。'); return; }
   showErr('');
   setPhase('busy');
-  startStages();
+  resetStages();
+
+  const form = () => { const f = new FormData(); f.append('file', file); f.append('site', id); return f; };
+
   try{
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('site', id);
-    const j = await api('/api/analyze', {method:'POST', body:fd});
+    let j = null;
+    try{
+      const resp = await fetch('/api/analyze_stream', {method:'POST', body:form()});
+      if(resp.ok && resp.body) j = await readStream(resp);
+    }catch(_){ /* 流断了就往下走，退回 blocking */ }
+
+    // 流不可用时的兜底：某些网络环境会把 SSE 攒着或直接掐断。
+    // 宁可退回老接口（进度条不动，但结论是对的），也不能让用户卡在这儿。
+    if(!j){
+      $('#busy-text').textContent = '分析中（进度暂不可用）';
+      j = await api('/api/analyze', {method:'POST', body:form()});
+    }
     stopStages();
     showResult(j);
   }catch(e){

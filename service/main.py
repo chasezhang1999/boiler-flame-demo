@@ -18,7 +18,8 @@ import uuid
 import httpx
 from fastapi import (FastAPI, File, Form, HTTPException, Query, Request,
                      UploadFile)
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import (HTMLResponse, PlainTextResponse, Response,
+                               StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from starlette.concurrency import run_in_threadpool
@@ -207,6 +208,94 @@ async def api_analyze(file: UploadFile = File(...), site: str = Form("")):
         "report_url": out.get("report_url", ""),
         "risk_level": out.get("risk_level", "未知"),
     }
+
+
+# 前端进度条原来是个定时器，按 [3,5,10,14] 秒依次点亮，跟后端跑到哪一步毫无关系。
+# 上传一张非火焰照片时，工作流第一步就停了，界面上却照样显示「CV 分割与指标 5s ✓」
+# 「风险判级 进行中」—— 那两行是编的。演示时被人追问一句就很难看。
+#
+# Dify 的 streaming 模式会吐出真实的节点事件（node_started / node_finished，
+# 带节点名、耗时和成功失败），转发给浏览器就能显示真进度。
+# 上面那个 blocking 版本留着不动，前端连不上流的时候还能退回去用。
+
+def _sse(obj: dict) -> bytes:
+    return b"data: " + json.dumps(obj, ensure_ascii=False).encode("utf-8") + b"\n\n"
+
+
+@app.post("/api/analyze_stream")
+async def api_analyze_stream(file: UploadFile = File(...), site: str = Form("")):
+    if not (DIFY_BASE and DIFY_KEY):
+        raise HTTPException(503, "未配置 DIFY_BASE / DIFY_API_KEY")
+
+    raw = await file.read()
+    fname = file.filename or "photo.jpg"
+    ctype = file.content_type or "image/jpeg"
+
+    async def stream():
+        hdr = {"Authorization": "Bearer %s" % DIFY_KEY}
+        try:
+            async with httpx.AsyncClient(timeout=300) as c:
+                up = await c.post(
+                    "%s/files/upload" % DIFY_BASE, headers=hdr,
+                    files={"file": (fname, raw, ctype)}, data={"user": "web"},
+                )
+                if up.status_code >= 300:
+                    yield _sse({"t": "error", "message": "上传失败：%s" % up.text[:200]})
+                    return
+                fid = up.json().get("id")
+                yield _sse({"t": "uploaded"})
+
+                body = {
+                    "inputs": {
+                        "photo": {"transfer_method": "local_file",
+                                  "upload_file_id": fid, "type": "image"},
+                        "site": sites.label_of(site) if site else "",
+                    },
+                    "response_mode": "streaming",
+                    "user": "web",
+                }
+                async with c.stream("POST", "%s/workflows/run" % DIFY_BASE,
+                                    headers=hdr, json=body) as resp:
+                    if resp.status_code >= 300:
+                        await resp.aread()
+                        yield _sse({"t": "error", "message": "运行失败：%s" % resp.text[:200]})
+                        return
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        try:
+                            ev = json.loads(line[5:].strip())
+                        except Exception:
+                            continue          # 心跳和空行，跳过
+                        kind = ev.get("event", "")
+                        d = ev.get("data") or {}
+                        if kind == "node_started":
+                            yield _sse({"t": "node", "name": d.get("title", ""),
+                                        "state": "start"})
+                        elif kind == "node_finished":
+                            yield _sse({"t": "node", "name": d.get("title", ""),
+                                        "state": "done",
+                                        "ok": d.get("status") == "succeeded",
+                                        "sec": round(d.get("elapsed_time") or 0, 1)})
+                        elif kind == "workflow_finished":
+                            out = d.get("outputs") or {}
+                            yield _sse({"t": "result",
+                                        "summary": out.get("summary", ""),
+                                        "report_url": out.get("report_url", ""),
+                                        "risk_level": out.get("risk_level", "未知")})
+                        # text_chunk 之类的忽略，前端用不上
+        except Exception as e:                      # 断流也得让前端收到收场信号
+            yield _sse({"t": "error", "message": "分析中断：%s" % e})
+
+    return StreamingResponse(
+        stream(), media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            # 让 nginx / openresty 别攒着 —— 攒着的话事件会最后一次性吐出来，
+            # 进度就又变成假的了。有这个响应头就不用去改反代配置。
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/api/history")
