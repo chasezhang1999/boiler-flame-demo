@@ -108,11 +108,19 @@ const STAGE_TOTAL = STAGE_MARKS[STAGE_MARKS.length - 1];
 
 function startStages(){
   t0 = Date.now();
-  $('#remain').textContent = STAGE_TOTAL;
+  // 每次都把这行重建：超时那段会整个换掉文字，#remain 会被连带删掉，
+  // 不复原的话第二次分析就取不到它了
+  $('#busy-text').innerHTML = '分析中 · 剩余约 <b id="remain">' + STAGE_TOTAL + '</b> 秒';
   $$('#stages .st').forEach(el => { el.className = 'st'; el.lastElementChild.textContent = '待执行'; });
   timer = setInterval(() => {
     const el = (Date.now() - t0) / 1000;
-    $('#remain').textContent = Math.max(1, Math.round(STAGE_TOTAL - el));
+    // 超过估计值就别再报假的剩余秒数了。原来会一直卡在「剩余约 1 秒」——
+    // 现场并发高时实测要等三十几秒，盯着那个「1 秒」看半分钟很难受。
+    if(el > STAGE_TOTAL){
+      $('#busy-text').textContent = '分析中 · 前面还有排队，已等 ' + Math.round(el) + ' 秒';
+    } else {
+      $('#remain').textContent = Math.max(1, Math.round(STAGE_TOTAL - el));
+    }
     let cur = STAGE_MARKS.findIndex(m => el < m);
     if(cur === -1) cur = STAGE_MARKS.length - 1;
     $$('#stages .st').forEach((n, i) => {
