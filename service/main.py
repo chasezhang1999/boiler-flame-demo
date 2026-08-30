@@ -21,6 +21,7 @@ from fastapi import (FastAPI, File, Form, HTTPException, Query, Request,
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from starlette.concurrency import run_in_threadpool
 
 from . import charts, ledger, report as report_tpl, sites, vision
 
@@ -69,10 +70,16 @@ def _save(name: str, data: bytes) -> str:
 # ---------------------------------------------------------------- CV 接口
 # 这两个给 Dify 工作流的 HTTP 节点调用，不直接面向浏览器
 
-@app.post("/analyze")
-async def analyze(file: UploadFile = File(...)):
+def _cv_pipeline(raw: bytes) -> dict:
+    """
+    纯 CPU 的那一段：解码、分割、伪彩、编码、落盘。
+
+    单独拆出来是为了能丢进线程池。之前这段直接写在 async def 里，OpenCV 是同步的，
+    于是它占着事件循环不放 —— 实测并发 20 张 4032×3024 的照片，总耗时正好等于
+    20 倍单张耗时，一点没并行，而且这期间连别人打开首页都排在后面。
+    """
     t0 = time.time()
-    bgr = vision.decode(await file.read())
+    bgr = vision.decode(raw)
     full, main = vision.flame_mask(bgr)
     temp = vision.temp_index(bgr)
     spots = vision.wall_hotspots(temp, full, main)
@@ -92,6 +99,12 @@ async def analyze(file: UploadFile = File(...)):
         "heatmap_url": _save("%s_heat.jpg" % tag, buf2.tobytes()),
         "elapsed_ms": int((time.time() - t0) * 1000),
     }
+
+
+@app.post("/analyze")
+async def analyze(file: UploadFile = File(...)):
+    raw = await file.read()
+    return await run_in_threadpool(_cv_pipeline, raw)
 
 
 @app.post("/report")

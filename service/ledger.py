@@ -58,6 +58,11 @@ def _conn():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     c = sqlite3.connect(DB_PATH, timeout=10)
     c.row_factory = sqlite3.Row
+    # 上面那把 _lock 只在单个进程里管用。uvicorn 一开多 worker 就是多个进程，
+    # 锁各管各的，写入要靠 SQLite 自己扛。WAL 下读不挡写、写不挡读，
+    # 默认的 rollback 日志会让并发写直接撞上 database is locked。
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("PRAGMA synchronous=NORMAL")
     return c
 
 
