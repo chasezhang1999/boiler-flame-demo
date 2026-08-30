@@ -122,12 +122,15 @@
   .viewport .cross{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%);pointer-events:none}
   .viewport .cross::before{content:"";position:absolute;left:16px;top:0;bottom:0;width:1px;background:rgba(255,255,255,.7)}
   .viewport .cross::after{content:"";position:absolute;top:16px;left:0;right:0;height:1px;background:rgba(255,255,255,.7)}
-  .viewport .foot{position:absolute;left:0;right:0;bottom:0;padding:8px 10px;color:#fff;font-size:11px;
+  /* z-index 2：分析中的遮罩会盖在取景框上，但机组/位置和状态这条必须一直看得见 ——
+     正在分析哪个机位是现场最要紧的信息，被盖住就只剩一堆进度文字了 */
+  .viewport .foot{position:absolute;left:0;right:0;bottom:0;padding:8px 10px;color:#fff;font-size:11px;z-index:2;
                   display:flex;justify-content:space-between;gap:10px;background:linear-gradient(transparent,rgba(0,0,0,.6))}
   .viewport .empty{position:absolute;inset:0;display:flex;flex-direction:column;gap:6px;align-items:center;
                    justify-content:center;color:var(--n600);font-family:var(--h);font-size:15px;text-align:center;padding:20px}
-  .stages{position:absolute;inset:0;background:rgba(29,31,32,.72);display:flex;flex-direction:column;
-          justify-content:flex-end;padding:16px;gap:10px}
+  /* 底部留出 .foot 那条的高度，进度列表往上顶，两者不再叠在一起 */
+  .stages{position:absolute;inset:0;background:rgba(29,31,32,.72);display:flex;flex-direction:column;z-index:1;
+          justify-content:flex-end;padding:16px 16px 40px;gap:10px}
   .stages .st{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;color:#fff;font-size:12px;opacity:.4}
   .stages .st.on,.stages .st.done{opacity:1}
   .stages .st i{display:block;width:9px;height:9px;justify-self:center;border:1px solid rgba(255,255,255,.45)}

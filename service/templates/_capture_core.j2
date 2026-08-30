@@ -100,26 +100,55 @@ async function onPicked(f){
 
 // 进度是按经验耗时推进的估计值，不是后端回调——一次 blocking 调用拿不到中间态，
 // 但等待期完全没反馈更糟。四段合计约 20 秒，跑完停在最后一段等真结果。
+// 四段的时间点按实测校准：照片校验约 3s（不是火焰的话就停在这儿了），
+// CV 很快，判级是模型调用约 4.5s，出报告落台账约 1s。整条链路单次约 10~14 秒。
+// 原来写死 20 秒是初版的估计，实测下来偏长，进度条会在最后一段干等。
+const STAGE_MARKS = [3, 5, 10, 14];
+const STAGE_TOTAL = STAGE_MARKS[STAGE_MARKS.length - 1];
+
 function startStages(){
   t0 = Date.now();
-  const marks = [2, 8, 16, 20];
+  $('#remain').textContent = STAGE_TOTAL;
   $$('#stages .st').forEach(el => { el.className = 'st'; el.lastElementChild.textContent = '待执行'; });
   timer = setInterval(() => {
     const el = (Date.now() - t0) / 1000;
-    $('#remain').textContent = Math.max(1, Math.round(20 - el));
-    let cur = marks.findIndex(m => el < m);
-    if(cur === -1) cur = 3;
+    $('#remain').textContent = Math.max(1, Math.round(STAGE_TOTAL - el));
+    let cur = STAGE_MARKS.findIndex(m => el < m);
+    if(cur === -1) cur = STAGE_MARKS.length - 1;
     $$('#stages .st').forEach((n, i) => {
       n.className = 'st' + (i < cur ? ' done' : i === cur ? ' on' : '');
-      n.lastElementChild.textContent = i < cur ? marks[i] + 's' : i === cur ? '进行中' : '待执行';
+      n.lastElementChild.textContent = i < cur ? STAGE_MARKS[i] + 's' : i === cur ? '进行中' : '待执行';
     });
-    $('#bar').style.width = Math.min(96, 8 + el / 20 * 88) + '%';
+    $('#bar').style.width = Math.min(96, 8 + el / STAGE_TOTAL * 88) + '%';
   }, 300);
 }
 function stopStages(){ clearInterval(timer); timer = null; }
 
+// 工作流第一步「照片校验」判定不是炉膛火焰时，会带这个等级回来，
+// 后面的 CV、判级、出报告、落台账全都没跑。见 tools/build_workflow.py 的 REJECT_CODE。
+const REJECTED = '未分析';
+
+// 被挡下时不能照着正常结论的样子渲染 —— 那会显示成「未分析风险」这种病句，
+// 还会打出「已存入台账」，而台账里其实什么都没有。
+function showRejected(j){
+  $('#verdict').innerHTML =
+    '<div class="top">' +
+      '<div class="badge" style="background:var(--n600)">未识别</div>' +
+      '<div class="mid"><div style="font-family:var(--h);font-size:17px;line-height:1.15">' +
+        '这不是炉膛火焰照片</div>' +
+      '<div style="font-size:11px;color:var(--n600);margin-top:2px" class="tnum">' +
+        '停在第 1 步「照片校验」· 用时 ' + ((Date.now() - t0)/1000).toFixed(1) + ' 秒' +
+        ' · 后续步骤未执行</div></div>' +
+    '</div>';
+  $('#btn-report').hidden = true;
+  $('#archived').textContent = '本次未进台账。换一张炉膛火焰照片再试。';
+  if(j.summary){ $('#summary').innerHTML = corners() + md2html(j.summary); $('#summary').hidden = false; }
+  setPhase('done');
+}
+
 function showResult(j){
   const lv = j.risk_level || '未知';
+  if(lv === REJECTED){ showRejected(j); return; }
   $('#verdict').innerHTML =
     '<div class="top">' +
       '<div class="badge ' + esc(lv) + '" style="background:' +
