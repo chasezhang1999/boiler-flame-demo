@@ -4,3 +4,8 @@ __pycache__/
 data/
 sample.md
 _t.html
+
+# 密钥，绝不能进 git（仓库是公开的）。要交接就给 .env.example
+.env
+# 补录用的原始照片，体积大且是现场资料
+inbox/
