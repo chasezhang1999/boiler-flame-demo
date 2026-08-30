@@ -104,13 +104,19 @@ async function onPicked(f){
 //
 // 界面上四行，各自对应 Dify 工作流里的哪些节点。节点名必须和 dify/workflow.yml
 // 里的 title 一字不差 —— 改了工作流的节点名，这里要跟着改，否则那一行永远不亮。
+// 第一行「上传照片」没有对应的 Dify 节点，由前端自己控制：图要先传给 Dify，
+// 传完工作流才启动，第一个节点事件才会来。这中间实测有两秒（手机上更久），
+// 不把这一步画出来的话，点完「开始分析」四行全是「待执行」，看着像卡死了。
+const UPLOAD_ROW = 0;
 const NODE_ROWS = [
+  [],                                  // 上传照片
   ['图像校验', '是火焰照片？'],
   ['CV 图像分析', '解析 CV 结果'],
   ['结焦风险判级'],
   ['渲染报告', '汇总输出'],
 ];
-// 这个节点一跑，就说明照片没通过校验，后面三行根本不会执行
+const CHECK_ROW = 1;                   // 校验那一行，被拒时标它
+// 这个节点一跑，就说明照片没通过校验，后面几行根本不会执行
 const REJECT_NODE = '拒绝并说明';
 // 开始 / 汇合 / 结束 是编排用的，不给用户看
 
@@ -135,6 +141,8 @@ function resetStages(){
   rowSec = NODE_ROWS.map(() => 0);
   $('#busy-text').textContent = '分析中';
   $$('#stages .st').forEach((n, i) => paintRow(i, '', '待执行'));
+  // 点下去立刻就有反应：这一刻确实已经在传图了
+  paintRow(UPLOAD_ROW, 'on', '进行中');
   $('#bar').style.width = '4%';
   // 只用来显示"已经等了多久"，不再假装知道还剩几秒
   timer = setInterval(() => {
@@ -147,8 +155,8 @@ function resetStages(){
 // 屏幕上显示的每一个"已完成"和每一个秒数，都是后端真的跑过才出现的。
 function onNode(ev){
   if(ev.name === REJECT_NODE && ev.state === 'start'){
-    paintRow(0, '', '未通过');
-    for(let i = 1; i < NODE_ROWS.length; i++) paintRow(i, '', '已跳过');
+    paintRow(CHECK_ROW, '', '未通过');
+    for(let i = CHECK_ROW + 1; i < NODE_ROWS.length; i++) paintRow(i, '', '已跳过');
     $('#bar').style.width = '100%';
     return;
   }
@@ -248,9 +256,12 @@ async function readStream(resp){
       if(!line.startsWith('data:')) continue;
       let ev;
       try{ ev = JSON.parse(line.slice(5).trim()); }catch(_){ continue; }
-      if(ev.t === 'node')       onNode(ev);
-      else if(ev.t === 'result') out = ev;
-      else if(ev.t === 'error')  throw new Error(ev.message || '分析出错');
+      if(ev.t === 'node')         onNode(ev);
+      // 上传这一步没有 Dify 节点，时间是浏览器自己量的，同样是真数字
+      else if(ev.t === 'uploaded') paintRow(UPLOAD_ROW, 'done',
+                                            ((Date.now() - t0)/1000).toFixed(1) + 's');
+      else if(ev.t === 'result')   out = ev;
+      else if(ev.t === 'error')    throw new Error(ev.message || '分析出错');
     }
   }
   return out;
