@@ -223,7 +223,8 @@
 </div>
 
 {% if abnormal %}
-<div class="kpis">
+{# 列数按实际越界项数走：不足四项时不留空格子 #}
+<div class="kpis" style="grid-template-columns:repeat({{ abnormal[:4]|length }},1fr)">
   {% for m in abnormal[:4] %}
   <div class="kpi">
     <div class="k">{{ m.label }}</div>
