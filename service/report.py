@@ -48,11 +48,22 @@ LEVELS = {
 UNKNOWN = {"ink": "#7a7a7d", "tint": "#f5f5f8", "line": "#d4d4d7",
            "label": "判级未知", "badge": "⚪ 判级未知"}
 
-# 越界配色：低于参考区间用蓝、高于用橙，两个方向必须一眼分得开
-COLOR_LOW = "#1f6d9c"
-COLOR_HIGH = "#c2410c"
-COLOR_OK = "#5d5d60"
-COLOR_INK = "#1d1f20"
+def _rgba(hex_color, alpha):
+    """#rrggbb → rgba(...)。深色版的结论条底色和描边都从等级主色推出来，
+    不另建一套色表 —— 少一份要跟着同步的东西。"""
+    h = hex_color.lstrip("#")
+    return "rgba(%d,%d,%d,%.2f)" % (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), alpha)
+
+# 越界配色：低于参考区间用蓝、高于用橙，两个方向必须一眼分得开。
+#
+# 这里给的是 CSS 变量引用而不是色值 —— 报告页屏幕上是深色（会场投屏白底会糊掉），
+# 打印时要翻回浅色，同一个色号不可能两边都合适。写成变量后，具体取值放在
+# report.html.j2 的 :root 和 @media print 里各定义一次，模板本身不用改。
+# markdown 版报告不用颜色，不受影响。
+COLOR_LOW = "var(--st-low)"
+COLOR_HIGH = "var(--st-high)"
+COLOR_OK = "var(--st-ok)"
+COLOR_INK = "var(--st-ink)"
 
 # 双向轴上参考带该占轨道的比例。满程由区间反推，不能写死：
 # 区间放宽到 ±55 而满程还钉在 ±50 时，参考带会铺满整条轨道、
@@ -315,9 +326,12 @@ def build_context(assessment_text: str, metrics: dict, contour_url: str,
     return {
         "level": level or "未知", "level_label": lv["label"], "badge": lv["badge"],
         "color": lv["ink"], "bg": lv["tint"], "line": lv["line"],
+        # 深色版的结论条：浅粉/浅黄那套底色放在暗底上会变成刺眼的白块
+        "bg_dark": _rgba(lv["ink"], .14), "line_dark": _rgba(lv["ink"], .45),
         "levels": [
             {"key": k, "label": k, "ink": LEVELS[k]["ink"],
-             "line": LEVELS[k]["line"], "active": k == level}
+             # 半透明描边，浅底暗底都看得见，省得为三档标尺再分两套
+             "line": _rgba(LEVELS[k]["ink"], .45), "active": k == level}
             for k in ("低", "中", "高")
         ],
         "color_low": COLOR_LOW, "color_high": COLOR_HIGH,

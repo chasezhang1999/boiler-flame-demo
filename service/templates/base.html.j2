@@ -30,8 +30,9 @@
     --corner:rgba(255,255,255,.52);
     --field-hover:rgba(255,255,255,.42);
     --row-hover:rgba(255,255,255,.05);
-    /* 压在彩色块（琥珀色的"中"风险）上的字，必须是深色 */
-    --on-warm:#16181a;
+    /* 压在色块上的字。深色版里 --accent 是浅蓝，配深字才够对比（8:1）；
+       打印时翻成浅色版，--accent 变深蓝，就得换回白字。 */
+    --on-accent:#16181a;--on-warm:#16181a;
     --h:"Barlow Condensed",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
     --b:"Barlow",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
   }
@@ -87,18 +88,18 @@
        padding:8px 14px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:0}
   .btn:hover{background:var(--hover)}
   .btn:disabled{opacity:.45;cursor:not-allowed}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-warm)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
   .btn.primary:hover{background:var(--accent-600)}
   .btn.primary:active{background:var(--accent-700)}
   .btn.lg{height:44px;font-size:15px}
   .chip{border:1px solid var(--line);background:transparent;color:var(--n700);
         padding:3px 10px;font-size:12px;font-family:var(--h);cursor:pointer;white-space:nowrap}
   .chip:hover{border-color:var(--accent);color:var(--accent-700)}
-  .chip.on{background:var(--accent);border-color:var(--accent);color:var(--on-warm)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
   .cell{border:1px solid var(--line);padding:11px 4px;text-align:center;cursor:pointer;
         font-family:var(--h);font-weight:600;font-size:15px;background:transparent;color:var(--ink)}
   .cell:hover{background:var(--accent-a)}
-  .cell.on{background:var(--accent);border-color:var(--accent);color:var(--on-warm)}
+  .cell.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
   label{display:block;font-size:12px;color:var(--n700);margin-bottom:5px}
   select,input[type=text],textarea{width:100%;padding:8px 10px;font:14px var(--b);color:var(--ink);
     border:1px solid var(--line);background:var(--surface-solid);border-radius:0;caret-color:var(--accent)}
@@ -107,8 +108,10 @@
   select:hover,textarea:hover{border-color:var(--field-hover)}
   textarea{resize:vertical}
 
+  /* 等级徽章一律深字压亮底：白字在红/绿上只有 2.6~3.5:1，投屏就糊了；
+     深字在三种等级色上都有 4.9:1 以上。 */
   .lv{display:inline-block;font-family:var(--h);font-weight:600;font-size:12px;
-      letter-spacing:.04em;padding:1px 9px;color:#fff;white-space:nowrap}
+      letter-spacing:.04em;padding:1px 9px;color:var(--on-warm);white-space:nowrap}
   .lv.高{background:var(--hi)}.lv.中{background:var(--mid);color:var(--on-warm)}
   .lv.低{background:var(--lo)}.lv.未知{background:var(--n600)}
 
@@ -137,7 +140,31 @@
   .md em{color:var(--n700);font-style:normal;font-size:13px}
   .md hr{border:0;border-top:1px solid var(--line);margin:16px 0}
 
-  @media print{.noprint{display:none!important}nav{display:none}}
+  /* 打印：整套变量翻回浅色版。
+     打印机默认不输出背景色，深色页打出来就是白底 + 浅灰字，等于一片空白。
+     颜色全收在变量里，所以这里重定义一遍就够，不用逐条改规则。 */
+  @media print{
+    .noprint{display:none!important}
+    nav{display:none}
+    #bgfx{display:none!important}
+    :root{
+      --ink:#1d1f20;--muted:#5d5d60;--faint:#98989b;
+      --line:rgba(29,31,32,.16);--line-soft:rgba(29,31,32,.08);
+      --bg:#fff;--tint:rgba(29,31,32,.03);
+      --accent:#5980a6;--accent-100:#eef6ff;--accent-300:#b5d9fd;
+      --accent-600:#597ea3;--accent-700:#416180;
+      --n100:#f5f5f8;--n200:#e7e7ea;--n300:#d4d4d7;
+      --n600:#7a7a7d;--n700:#5d5d60;--n800:#424244;
+      --hi:#e0483a;--mid:#fbaf17;--lo:#22a35c;
+      --surface:transparent;--surface-solid:#fff;
+      --hover:rgba(29,31,32,.07);--accent-a:rgba(89,128,166,.08);
+      --corner:rgba(29,31,32,.55);--field-hover:rgba(29,31,32,.45);
+      --row-hover:transparent;--on-accent:#fff;--on-warm:#1d1f20;
+    }
+    html,body{background:#fff}
+    /* 风险等级块靠底色区分，这是信息本身，必须打出来 */
+    .lv,.verdict .badge{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
 
   /* ── 拍照页共用：取景框 / 进度 / 结论条（手机版和网页版都用这套） ── */
   .viewport{position:relative;aspect-ratio:3/4;border:1px solid var(--line);overflow:hidden;background:var(--n200)}
@@ -165,7 +192,7 @@
   .bar i{display:block;height:2px;background:var(--accent-300);width:8%;transition:width .4s}
   .verdict{border:1px solid var(--line);display:flex;flex-direction:column}
   .verdict .top{display:flex;align-items:stretch}
-  .verdict .badge{display:flex;align-items:center;padding:0 12px;font-family:var(--h);font-weight:600;font-size:16px;color:#fff}
+  .verdict .badge{display:flex;align-items:center;padding:0 12px;font-family:var(--h);font-weight:600;font-size:16px;color:var(--on-warm)}
   .verdict .badge.中{color:var(--on-warm)}
   .verdict .mid{padding:8px 10px;flex:1;min-width:0}
   /* 两行排：时间 + 等级 + 报告一行，结论单独一行可换行。窄栏里挤成一坨的元凶是四列硬排。 */

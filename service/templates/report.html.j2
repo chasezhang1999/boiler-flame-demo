@@ -7,15 +7,27 @@
    挂上去报告页会白屏等到超时。文件用 fetch_fonts.py 抓取。 #}
 <link rel="stylesheet" href="/assets/fonts/fonts.css">
 <style>
+  /* 屏幕上走深色（会场投屏白底会整片糊掉），打印时在下面的 @media print 里
+     把整套变量翻回浅色 —— 报告是要打印和存 PDF 的，那边必须是白底黑字。
+     报告页不铺火焰背景：这是一份要逐行读的文档，底下有纹理会碍事。 */
   :root{
-    --ink:#1d1f20;--muted:#5d5d60;--faint:#98989b;--line:#e3e3e6;
-    --accent:{{ color }};--tint:{{ bg }};--tint-line:{{ line }};
-    --low:{{ color_low }};--high:{{ color_high }};
+    --ink:#f0f0f3;--muted:#a2a2a9;--faint:#75757c;--line:rgba(255,255,255,.18);
+    --accent:{{ color }};--tint:{{ bg_dark }};--tint-line:{{ line_dark }};
+    --page:#0c0d0e;--panel:#141618;--imgbg:#1a1c1f;
+    --link:#a8c9e8;--link-hover:#cfe2f5;--link-soft:#6f9dc9;
+    --info-bg:rgba(111,157,201,.12);--info-line:rgba(111,157,201,.38);
+    --track:#22262a;--band:#3a4046;--code-bg:#141618;
+    /* 指标越界的三种状态色。report.py 里那几个常量现在给的是这几个变量名。 */
+    --st-low:#5aa8d8;--st-high:#f0763a;--st-ok:#a2a2a9;--st-ink:#f0f0f3;
+    /* 压在越界色块上的字：深色版那两个色是亮的，得配深字（8:1）；
+       打印时色号变深，换回白字。 */
+    --on-state:#16181a;
     --h:"Barlow Condensed",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
     --b:"Barlow",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:#fff;color:var(--ink);font:15px/1.55 var(--b)}
+  html,body{background:var(--page)}
+  body{margin:0;color:var(--ink);font:15px/1.55 var(--b)}
   .wrap{max-width:960px;margin:0 auto;padding:34px 34px 60px}
   h1,h2,h3{font-family:var(--h);font-weight:600;letter-spacing:-.01em;margin:0}
 
@@ -23,7 +35,7 @@
   .top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
        border-bottom:1px solid var(--line);padding-bottom:10px}
   .brand{font-family:var(--h);font-weight:600;font-size:13px;letter-spacing:.08em;
-         text-transform:uppercase;color:#416180}
+         text-transform:uppercase;color:var(--link)}
   .top .meta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
   .doctitle{font-size:31px;line-height:1.15;margin:22px 0 0}
   .docsub{font-size:14px;color:var(--muted);margin-top:5px}
@@ -37,7 +49,7 @@
           text-transform:uppercase;color:#7a7a7d}
   .vhead{display:flex;align-items:baseline;gap:12px;margin-top:6px;flex-wrap:wrap}
   .lv{font-family:var(--h);font-weight:600;font-size:26px;line-height:1;
-      letter-spacing:.02em;background:var(--accent);color:#1d1f20;padding:5px 14px 3px}
+      letter-spacing:.02em;background:var(--accent);color:#16181a;padding:5px 14px 3px}
   .vtitle{font-family:var(--h);font-size:38px;line-height:1}
   .vsum{font-size:14px;color:var(--muted);margin-top:12px;max-width:56ch;text-wrap:pretty}
   .score{font-family:var(--h);font-size:64px;line-height:.9;font-variant-numeric:tabular-nums}
@@ -45,11 +57,11 @@
   .scale{display:flex;gap:4px;justify-content:flex-end;margin-top:14px}
   .scale i{font-family:var(--h);font-style:normal;font-size:13px;letter-spacing:.06em;
            padding:3px 11px;border:1px solid var(--line);color:var(--muted)}
-  .scale i.on{color:#1d1f20;font-weight:600}
+  .scale i.on{color:var(--ink);font-weight:600}
 
   /* 关键指标带：把最该先看的四项提到最前 */
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);margin-top:1px}
-  .kpi{background:#fff;padding:16px 18px}
+  .kpi{background:var(--panel);padding:16px 18px}
   .kpi .k{font-size:12px;color:var(--muted)}
   .kpi .v{display:flex;align-items:baseline;gap:5px;margin-top:5px}
   .kpi .v b{font-family:var(--h);font-weight:600;font-size:30px;line-height:1;
@@ -60,7 +72,7 @@
   /* 图与区块 */
   .imgs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:34px}
   figure{margin:0;border:1px solid var(--line);padding:10px;break-inside:avoid}
-  figure img{width:100%;display:block;background:#e9e9ea}
+  figure img{width:100%;display:block;background:var(--imgbg)}
   figcaption{font-size:11px;color:var(--muted);margin-top:8px;display:flex;
              justify-content:space-between;gap:10px}
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:34px;margin-top:34px}
@@ -69,20 +81,20 @@
           border-bottom:1px solid var(--line);padding-bottom:6px}
   .sechd h3{font-size:20px}
   .tag{font-family:var(--h);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
-       color:#416180;border:1px solid var(--line);padding:1px 7px;white-space:nowrap}
-  .tag.photo{border-color:#b5d9fd;background:#eef6ff}
+       color:var(--link);border:1px solid var(--line);padding:1px 7px;white-space:nowrap}
+  .tag.photo{border-color:var(--info-line);background:var(--info-bg)}
   .hint{font-size:11px;color:var(--muted)}
   .hint b{font-weight:600}
   ul.list{margin:12px 0 0;padding:0;list-style:none;display:grid;gap:9px}
   ul.list li{display:grid;grid-template-columns:16px 1fr;gap:8px;font-size:14px;text-wrap:pretty}
-  ul.list li::before{content:"—";color:#749dc4}
-  .advice{background:#eef6ff;border:1px solid #b5d9fd;padding:18px 20px}
+  ul.list li::before{content:"—";color:var(--link-soft)}
+  .advice{background:var(--info-bg);border:1px solid var(--info-line);padding:18px 20px}
   .advice h3{font-size:20px;margin-bottom:12px}
   .advice ol{margin:0;padding:0;list-style:none;display:grid;gap:10px;counter-reset:s}
   .advice li{counter-increment:s;display:grid;grid-template-columns:22px 1fr;gap:8px;
              font-size:14px;text-wrap:pretty}
   .advice li::before{content:counter(s,decimal-leading-zero);font-family:var(--h);
-             font-weight:600;color:#416180;font-variant-numeric:tabular-nums}
+             font-weight:600;color:var(--link);font-variant-numeric:tabular-nums}
 
   /* 指标表：灰带＝参考区间，竖线＝本次读数，越界按方向分色 */
   table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
@@ -93,8 +105,8 @@
            font-weight:600;white-space:nowrap}
   .mt .num .unit{color:var(--muted);font-weight:400;font-size:12px;margin-left:2px}
   .mt .st{width:16%;padding-left:18px}
-  .track{position:relative;height:10px;background:#eeeef0}
-  .track .band{position:absolute;top:0;bottom:0;background:#d4d4d7}
+  .track{position:relative;height:10px;background:var(--track)}
+  .track .band{position:absolute;top:0;bottom:0;background:var(--band)}
   .track .zero{position:absolute;top:-2px;bottom:-2px;left:50%;width:1px;background:var(--faint)}
   .track .mark{position:absolute;top:-3px;bottom:-3px;transform:translateX(-50%)}
   /* 爆表：用贴边的小三角表示「还在更外面」，不要画成一根顶格的竖线 */
@@ -111,16 +123,16 @@
   .grid td{padding:9px 4px}
   .grid .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
   .muted{color:var(--muted);font-size:13.5px}
-  .raw{white-space:pre-wrap;background:#f5f5f8;padding:12px;font-size:13px;overflow-x:auto}
+  .raw{white-space:pre-wrap;background:var(--code-bg);padding:12px;font-size:13px;overflow-x:auto}
   details{margin-top:14px}
   summary{cursor:pointer;color:var(--muted);font-size:13.5px}
-  details pre{white-space:pre-wrap;background:#f5f5f8;padding:12px;font-size:12.5px;
+  details pre{white-space:pre-wrap;background:var(--code-bg);padding:12px;font-size:12.5px;
               margin-top:8px;overflow-x:auto}
   .note{margin-top:27px;border-top:1px solid var(--line);padding-top:12px;
         font-size:12px;color:var(--muted);text-wrap:pretty}
   .note b{color:var(--ink);font-weight:600}
-  a{color:#416180;text-underline-offset:3px}
-  a:hover{color:#2c455d}
+  a{color:var(--link);text-underline-offset:3px}
+  a:hover{color:var(--link-hover)}
 
   @media(max-width:760px){
     .wrap{padding:20px 16px 48px}
@@ -132,11 +144,26 @@
     .imgs,.cols{grid-template-columns:1fr;gap:20px}
     .mt th{width:40%}.mt .barcell{display:none}.mt .num{width:30%}.mt .st{width:30%}
   }
+  /* 打印机默认不输出背景色，深色页打出来是白底浅灰字＝一片空白。
+     颜色都在变量里，这里重定义一遍就够。 */
   @media print{
     .wrap{padding:0}
     details{display:none}
     .verdict,.kpis,figure,.sec,table{break-inside:avoid}
     a[href]::after{content:""}
+    :root{
+      --ink:#1d1f20;--muted:#5d5d60;--faint:#98989b;--line:#e3e3e6;
+      --tint:{{ bg }};--tint-line:{{ line }};
+      --page:#fff;--panel:#fff;--imgbg:#e9e9ea;
+      --link:#416180;--link-hover:#2c455d;--link-soft:#749dc4;
+      --info-bg:#eef6ff;--info-line:#b5d9fd;
+      --track:#eeeef0;--band:#d4d4d7;--code-bg:#f5f5f8;
+      --st-low:#1f6d9c;--st-high:#c2410c;--st-ok:#5d5d60;--st-ink:#1d1f20;
+      --on-state:#fff;
+    }
+    /* 等级色块和参考区间带靠底色传达信息，必须打出来 */
+    .lv,.scale i.on,.track,.track .band,.state,.verdict{
+      -webkit-print-color-adjust:exact;print-color-adjust:exact}
   }
 </style></head><body><div class="wrap">
 
@@ -267,7 +294,7 @@
       <td class="num" style="color:{{ m.value_color }}">{{ m.value }}<span class="unit">{{ m.unit }}</span></td>
       <td class="st">
         <span class="state"
-              style="color:{% if m.abnormal %}#fff{% else %}{{ color_ok }}{% endif %};
+              style="color:{% if m.abnormal %}var(--on-state){% else %}{{ color_ok }}{% endif %};
                      background:{% if m.abnormal %}{{ m.color }}{% else %}transparent{% endif %};
                      border-color:{% if m.abnormal %}{{ m.color }}{% else %}transparent{% endif %}">{{ m.state }}</span>
       </td>
