@@ -125,8 +125,14 @@ function paintRow(i, cls, text){
   n.lastElementChild.textContent = text;
 }
 
+// 每行的累计耗时。一行对应好几个节点时，显示的必须是这一行的合计 ——
+// 只取最后一个节点的话，「照片校验」会显示 0s（末尾那个 if-else 判断本来就不花时间），
+// 而真正花了两秒的是它前面那次模型调用。数字是真的，但指的不是那件事，一样是误导。
+let rowSec = [];
+
 function resetStages(){
   t0 = Date.now();
+  rowSec = NODE_ROWS.map(() => 0);
   $('#busy-text').textContent = '分析中';
   $$('#stages .st').forEach((n, i) => paintRow(i, '', '待执行'));
   $('#bar').style.width = '4%';
@@ -151,10 +157,12 @@ function onNode(ev){
   if(ev.state === 'start'){
     paintRow(i, 'on', '进行中');
   } else {
+    rowSec[i] += (ev.sec || 0);
     // 一行对应多个节点时，最后一个跑完才算这行完成
     const last = NODE_ROWS[i][NODE_ROWS[i].length - 1];
-    if(ev.name === last) paintRow(i, ev.ok ? 'done' : '', ev.ok ? ev.sec + 's' : '失败');
-    else paintRow(i, 'on', '进行中');
+    if(!ev.ok)            paintRow(i, '', '失败');
+    else if(ev.name === last) paintRow(i, 'done', rowSec[i].toFixed(1) + 's');
+    else                  paintRow(i, 'on', '进行中');
     $('#bar').style.width = Math.round((i + 1) / NODE_ROWS.length * 100) + '%';
   }
 }
