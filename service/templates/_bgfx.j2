@@ -1,0 +1,128 @@
+{# 页面背景：一层实时渲染的火焰流体，铺在所有内容底下。
+   不是图片也不是视频 —— 一段片元着色器算出来的，约 4KB，任意分辨率都清晰。
+   手法是「域扭曲」：拿噪声去扰动另一层噪声的采样坐标，出来就是缓慢翻涌的流体感。
+
+   现场是几百人扫码，所以省电这几件事都做了：
+     · 按 0.55~0.75 倍分辨率画，再由 CSS 拉满屏，肉眼看不出
+     · 封顶 30 帧
+     · 页面切到后台就停（切回来接着算，不会跳）
+     · 系统开了「减弱动态效果」就定格成一张静态图
+     · 没有 WebGL 就什么都不做，退回 body 的纯色底
+#}
+<canvas id="bgfx" aria-hidden="true"></canvas>
+<script>
+(function(){
+  var cv = document.getElementById('bgfx');
+  var gl = null;
+  try{
+    gl = cv.getContext('webgl', {antialias:false, alpha:false, depth:false,
+                                 powerPreference:'low-power'});
+  }catch(e){}
+  if(!gl){ cv.style.display = 'none'; return; }   // 退回纯色底，不报错
+
+  var VS = 'attribute vec2 aPos;void main(){gl_Position=vec4(aPos,0.,1.);}';
+  var FS = [
+'precision mediump float;',
+'uniform vec2  uRes;',
+'uniform float uT;',
+'uniform float uGain;',
+'float hash(vec2 p){',
+'  p = fract(p * vec2(123.34, 456.21));',
+'  p += dot(p, p + 45.32);',
+'  return fract(p.x * p.y);',
+'}',
+// 值噪声：四角插值。比梯度噪声便宜，做背景够用
+'float noise(vec2 p){',
+'  vec2 i = floor(p), f = fract(p);',
+'  vec2 u = f * f * (3.0 - 2.0 * f);',
+'  return mix(mix(hash(i), hash(i+vec2(1,0)), u.x),',
+'             mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), u.x), u.y);',
+'}',
+'float fbm(vec2 p){',
+'  float v = 0.0, a = 0.5;',
+'  for(int i = 0; i < 5; i++){ v += a * noise(p); p *= 2.02; a *= 0.5; }',
+'  return v;',
+'}',
+'void main(){',
+'  vec2 uv = gl_FragCoord.xy / uRes;',
+'  vec2 p  = (uv - 0.5) * vec2(uRes.x / uRes.y, 1.0) * 2.6;',
+// 域扭曲：q 扰动 r，r 再扰动最终采样，三层套下来就有流体的翻涌感
+'  float t = uT * 0.055;',
+'  vec2 q = vec2(fbm(p + vec2(0.0, t)), fbm(p + vec2(5.2, 1.3) - vec2(t, 0.0)));',
+'  vec2 r = vec2(fbm(p + 3.4*q + vec2(1.7, 9.2) + t*0.7),',
+'                fbm(p + 3.4*q + vec2(8.3, 2.8) - t*0.6));',
+'  float f = fbm(p + 3.2*r);',
+// 中间一条横向亮带 + 左边喷口起往右扩散，呼应看火孔里那道火舌
+'  float band = exp(-pow(abs(uv.y - 0.5) * 3.4, 2.0));',
+'  float jet  = smoothstep(0.02, 0.55, uv.x);',
+'  float d = clamp(f * band * jet + 0.12 * r.x * band, 0.0, 1.0);',
+'  d = pow(d, 2.1);',            // 压低暗部，只让最亮处发光
+'  vec3 c = vec3(0.028, 0.030, 0.034);',
+'  c = mix(c, vec3(0.34, 0.09, 0.035), smoothstep(0.00, 0.30, d));',
+'  c = mix(c, vec3(0.86, 0.38, 0.09),  smoothstep(0.28, 0.72, d));',
+'  c = mix(c, vec3(1.00, 0.80, 0.50),  smoothstep(0.80, 1.00, d));',
+'  c *= 1.0 - 0.62 * length((uv - 0.5) * vec2(1.12, 1.05));',   // 暗角
+'  gl_FragColor = vec4(max(c * uGain, vec3(0.020, 0.021, 0.024)), 1.0);',
+'}'].join('\n');
+
+  function sh(type, src){
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)){
+      console.error('bgfx:', gl.getShaderInfoLog(s)); return null;
+    }
+    return s;
+  }
+  var vs = sh(gl.VERTEX_SHADER, VS), fs = sh(gl.FRAGMENT_SHADER, FS);
+  if(!vs || !fs){ cv.style.display = 'none'; return; }
+
+  var prog = gl.createProgram();
+  gl.attachShader(prog, vs); gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){ cv.style.display = 'none'; return; }
+  gl.useProgram(prog);
+
+  var buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  // 一个盖满屏幕的大三角形，比两个三角形拼的矩形少一次光栅化接缝
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  var loc = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+  var uRes = gl.getUniformLocation(prog, 'uRes'),
+      uT   = gl.getUniformLocation(prog, 'uT'),
+      uG   = gl.getUniformLocation(prog, 'uGain');
+
+  // 手机上少画一半以上的像素，再由 CSS 拉满。背景本来就糊，看不出区别。
+  var SCALE = innerWidth < 820 ? 0.55 : 0.75;
+  function size(){
+    cv.width  = Math.max(2, Math.round(innerWidth  * SCALE));
+    cv.height = Math.max(2, Math.round(innerHeight * SCALE));
+    gl.viewport(0, 0, cv.width, cv.height);
+  }
+  size();
+  var rt = null;
+  addEventListener('resize', function(){       // 手机转屏会连着触发好几次，防抖
+    clearTimeout(rt); rt = setTimeout(size, 160);
+  });
+
+  var still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var MIN_DT = 1000 / 30;
+  var last = 0, acc = 0, prev = performance.now();
+
+  function frame(now){
+    requestAnimationFrame(frame);
+    if(document.hidden) { prev = now; return; }   // 后台不画，也不让时间空跑
+    if(now - last < MIN_DT) return;
+    last = now;
+    acc += Math.min(now - prev, 100) / 1000;      // 切回前台时别一下子跳一大段
+    prev = now;
+    gl.uniform2f(uRes, cv.width, cv.height);
+    gl.uniform1f(uT, still ? 8.0 : acc);
+    gl.uniform1f(uG, {{ bgfx_gain|default(0.5) }});
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>

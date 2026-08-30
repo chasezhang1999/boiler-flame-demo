@@ -24,7 +24,8 @@
   #drop{cursor:pointer}
   #drop.over{border-color:var(--accent);background:var(--accent-100)}
 
-  .card{padding:18px 20px;background:var(--bg)}
+  {# 半透明衬底：底下那层火焰透上来一点，但正文不至于压在乱纹理上 #}
+  .card{padding:18px 20px;background:var(--surface)}
   /* 结论未出时的占位：#result 一旦显示就把它藏掉，不用另写 JS */
   #result:not([hidden]) ~ #ph{display:none}
   #ph{border:1px dashed var(--line);padding:34px 20px;text-align:center;color:var(--n600);

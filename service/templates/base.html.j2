@@ -6,33 +6,55 @@
 <link rel="icon" href="/assets/logo.png">
 <link rel="stylesheet" href="/assets/fonts/fonts.css">
 <style>
-  /* Industry：钢蓝 + 线框。方角、发丝描边、卡片四角十字标记。 */
+  /* Industry：钢蓝 + 线框。方角、发丝描边、卡片四角十字标记。
+     深色版 —— 会场投屏白底会整片糊掉，所以全站走暗底，且对比度往高了给：
+     正文 #f0f0f3 对 #0c0d0e 是 17:1，远超无障碍标准的 4.5:1，投出去也扛得住。
+     n100~n300 在浅色版里是"越小越浅的底"，暗色版整个反过来当深色面用；
+     n600~n800 仍是文字色，只是全部提亮。 */
   :root{
-    --ink:#1d1f20;--muted:#5d5d60;--faint:#98989b;
-    --line:rgba(29,31,32,.16);--line-soft:rgba(29,31,32,.08);
-    --bg:#fff;--tint:rgba(29,31,32,.03);
-    --accent:#5980a6;--accent-100:#eef6ff;--accent-300:#b5d9fd;--accent-600:#597ea3;--accent-700:#416180;
-    --n100:#f5f5f8;--n200:#e7e7ea;--n300:#d4d4d7;--n600:#7a7a7d;--n700:#5d5d60;--n800:#424244;
-    --hi:#e0483a;--mid:#fbaf17;--lo:#22a35c;
+    --ink:#f0f0f3;--muted:#a2a2a9;--faint:#75757c;
+    --line:rgba(255,255,255,.20);--line-soft:rgba(255,255,255,.10);
+    --bg:#0c0d0e;--tint:rgba(255,255,255,.04);
+    --accent:#6f9dc9;--accent-100:rgba(111,157,201,.16);--accent-300:#9dc6f0;
+    --accent-600:#84aed6;--accent-700:#a8c9e8;
+    --n100:#141618;--n200:#1a1c1f;--n300:#262a2e;
+    --n600:#9a9aa1;--n700:#b0b0b7;--n800:#d2d2d7;
+    --hi:#e85a4c;--mid:#fbaf17;--lo:#2bb96a;
+    /* 卡片/面板的衬底。半透明是为了让底下那层火焰透上来一点，
+       又不至于让正文压在乱纹理上读不清。 */
+    --surface:rgba(14,16,18,.74);
+    --surface-solid:#111315;
+    /* 以下几个原来是写死的 rgba(29,31,32,…)，都是按白底算的，暗底下等于没效果 */
+    --hover:rgba(255,255,255,.08);
+    --accent-a:rgba(111,157,201,.14);
+    --corner:rgba(255,255,255,.52);
+    --field-hover:rgba(255,255,255,.42);
+    --row-hover:rgba(255,255,255,.05);
+    /* 压在彩色块（琥珀色的"中"风险）上的字，必须是深色 */
+    --on-warm:#16181a;
     --h:"Barlow Condensed",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
     --b:"Barlow",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
   }
+  /* 背景那层火焰铺满视口，钉在所有内容底下 */
+  #bgfx{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:-1;
+        pointer-events:none;background:var(--bg)}
+  html{background:#0c0d0e}          /* 样式生效前先铺黑，别白闪一下 */
   *,*::before,*::after{box-sizing:border-box}
   [hidden]{display:none!important}   /* 内联 display 会盖掉 hidden 属性，这里钉死 */
-  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--b)}
+  body{margin:0;background:transparent;color:var(--ink);font:15px/1.55 var(--b)}
   h1,h2,h3,h4{font-family:var(--h);font-weight:600;line-height:1.12;letter-spacing:-.015em;margin:0}
   a{color:var(--accent-700);text-underline-offset:3px}
-  a:hover{color:#2c455d}
+  a:hover{color:#cfe2f5}
   :focus{outline:none}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-  ::selection{background:rgba(89,128,166,.3)}
+  ::selection{background:rgba(111,157,201,.42)}
   .muted{color:var(--n700);font-size:13px}
   .nowrap{white-space:nowrap}
   .tnum{font-variant-numeric:tabular-nums}
 
   /* 线框对象：方角 + 发丝边 + 四角十字标记 */
   .bp{position:relative;border:1px solid var(--line);background:transparent}
-  .bp>i.c{position:absolute;width:11px;height:11px;color:rgba(29,31,32,.55)}
+  .bp>i.c{position:absolute;width:11px;height:11px;color:var(--corner)}
   .bp>i.c::before,.bp>i.c::after{content:"";position:absolute;background:currentColor}
   .bp>i.c::before{left:5px;top:0;width:1px;height:100%}
   .bp>i.c::after{top:5px;left:0;width:100%;height:1px}
@@ -40,7 +62,7 @@
   .bp>i.bl{bottom:-6px;left:-6px}.bp>i.br{bottom:-6px;right:-6px}
 
   /* 顶部导航 */
-  nav{display:flex;align-items:stretch;background:var(--bg);
+  nav{display:flex;align-items:stretch;background:rgba(10,11,12,.88);backdrop-filter:blur(10px);
       border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
   .brand{display:flex;align-items:center;gap:10px;padding:0 20px;
          border-right:1px solid var(--line);white-space:nowrap}
@@ -50,8 +72,8 @@
   nav .tabs a{display:flex;align-items:center;padding:14px 20px;text-decoration:none;white-space:nowrap;
       font-family:var(--h);font-weight:600;font-size:15px;color:var(--n600);
       border-right:1px solid var(--line);border-bottom:2px solid transparent}
-  nav .tabs a:hover{background:rgba(89,128,166,.08);color:var(--ink)}
-  nav .tabs a.on{color:var(--ink);border-bottom-color:var(--accent);background:rgba(89,128,166,.08)}
+  nav .tabs a:hover{background:var(--accent-a);color:var(--ink)}
+  nav .tabs a.on{color:var(--ink);border-bottom-color:var(--accent);background:var(--accent-a)}
   nav .status{margin-left:auto;display:flex;align-items:center;gap:16px;padding:0 20px;
               font-family:var(--h);font-size:13px;letter-spacing:.06em;color:var(--n700);
               white-space:nowrap;overflow:hidden}
@@ -63,38 +85,40 @@
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;
        font-family:var(--h);font-weight:600;font-size:14px;line-height:1.2;cursor:pointer;
        padding:8px 14px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:0}
-  .btn:hover{background:rgba(29,31,32,.07)}
+  .btn:hover{background:var(--hover)}
   .btn:disabled{opacity:.45;cursor:not-allowed}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-warm)}
   .btn.primary:hover{background:var(--accent-600)}
   .btn.primary:active{background:var(--accent-700)}
   .btn.lg{height:44px;font-size:15px}
   .chip{border:1px solid var(--line);background:transparent;color:var(--n700);
         padding:3px 10px;font-size:12px;font-family:var(--h);cursor:pointer;white-space:nowrap}
   .chip:hover{border-color:var(--accent);color:var(--accent-700)}
-  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:var(--on-warm)}
   .cell{border:1px solid var(--line);padding:11px 4px;text-align:center;cursor:pointer;
         font-family:var(--h);font-weight:600;font-size:15px;background:transparent;color:var(--ink)}
-  .cell:hover{background:rgba(89,128,166,.08)}
-  .cell.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .cell:hover{background:var(--accent-a)}
+  .cell.on{background:var(--accent);border-color:var(--accent);color:var(--on-warm)}
   label{display:block;font-size:12px;color:var(--n700);margin-bottom:5px}
   select,input[type=text],textarea{width:100%;padding:8px 10px;font:14px var(--b);color:var(--ink);
-    border:1px solid var(--line);background:transparent;border-radius:0;caret-color:var(--accent)}
-  select:hover,textarea:hover{border-color:rgba(29,31,32,.45)}
+    border:1px solid var(--line);background:var(--surface-solid);border-radius:0;caret-color:var(--accent)}
+  /* 下拉展开的那一层是系统画的，不显式给深色就会是白底 */
+  select option{background:var(--surface-solid);color:var(--ink)}
+  select:hover,textarea:hover{border-color:var(--field-hover)}
   textarea{resize:vertical}
 
   .lv{display:inline-block;font-family:var(--h);font-weight:600;font-size:12px;
       letter-spacing:.04em;padding:1px 9px;color:#fff;white-space:nowrap}
-  .lv.高{background:var(--hi)}.lv.中{background:var(--mid);color:var(--ink)}
+  .lv.高{background:var(--hi)}.lv.中{background:var(--mid);color:var(--on-warm)}
   .lv.低{background:var(--lo)}.lv.未知{background:var(--n600)}
 
   table{width:100%;border-collapse:collapse;font-size:14px}
   th{text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--n700);
      padding:7px;border-bottom:1px solid var(--line);white-space:nowrap}
   td{padding:7px;border-bottom:1px solid var(--line-soft)}
-  tbody tr:hover{background:rgba(29,31,32,.04)}
+  tbody tr:hover{background:var(--row-hover)}
 
-  .err{border:1px solid #f3c4bf;background:#fdedec;color:#922b21;padding:10px 12px;font-size:14px}
+  .err{border:1px solid rgba(232,90,76,.55);background:rgba(232,90,76,.13);color:#f7a99f;padding:10px 12px;font-size:14px}
   .spin{display:inline-block;width:13px;height:13px;border:2px solid var(--accent);
         border-top-color:transparent;border-radius:50%;animation:s .8s linear infinite;vertical-align:-2px}
   @keyframes s{to{transform:rotate(360deg)}}
@@ -129,7 +153,7 @@
   .viewport .empty{position:absolute;inset:0;display:flex;flex-direction:column;gap:6px;align-items:center;
                    justify-content:center;color:var(--n600);font-family:var(--h);font-size:15px;text-align:center;padding:20px}
   /* 底部留出 .foot 那条的高度，进度列表往上顶，两者不再叠在一起 */
-  .stages{position:absolute;inset:0;background:rgba(29,31,32,.72);display:flex;flex-direction:column;z-index:1;
+  .stages{position:absolute;inset:0;background:rgba(6,7,8,.82);display:flex;flex-direction:column;z-index:1;
           justify-content:flex-end;padding:16px 16px 40px;gap:10px}
   .stages .st{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;color:#fff;font-size:12px;opacity:.4}
   .stages .st.on,.stages .st.done{opacity:1}
@@ -142,7 +166,7 @@
   .verdict{border:1px solid var(--line);display:flex;flex-direction:column}
   .verdict .top{display:flex;align-items:stretch}
   .verdict .badge{display:flex;align-items:center;padding:0 12px;font-family:var(--h);font-weight:600;font-size:16px;color:#fff}
-  .verdict .badge.中{color:var(--ink)}
+  .verdict .badge.中{color:var(--on-warm)}
   .verdict .mid{padding:8px 10px;flex:1;min-width:0}
   /* 两行排：时间 + 等级 + 报告一行，结论单独一行可换行。窄栏里挤成一坨的元凶是四列硬排。 */
   .rowlist .r{display:grid;grid-template-columns:auto auto 1fr;gap:4px 8px;align-items:center;
@@ -162,6 +186,8 @@
 </style>
 {% block head %}{% endblock %}
 </head><body>
+
+{% include "_bgfx.j2" %}
 
 <nav class="noprint">
   <div class="brand"><img src="/assets/logo.png" alt="炉智检"><b>炉智检</b></div>
